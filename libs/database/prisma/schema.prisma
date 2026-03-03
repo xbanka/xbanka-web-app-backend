@@ -1,0 +1,73 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum OnboardingStep {
+  SIGNUP
+  EMAIL_VERIFIED
+  BASIC_INFO
+  BVN
+  IDENTITY
+  SELFIE
+  ADDRESS
+  COMPLETED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model User {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  password        String
+  isEmailVerified Boolean        @default(false)
+  currentStep     OnboardingStep @default(SIGNUP)
+  referralCode    String?        @unique
+  referredBy      String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  profile Profile?
+  kyc     KycRecord?
+}
+
+model Profile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id])
+  firstName   String?
+  lastName    String?
+  dateOfBirth DateTime?
+  phoneNumber String?   @unique
+  gender      String?
+  country     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model KycRecord {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id])
+  bvn            String?   @unique
+  bvnVerified    Boolean   @default(false)
+  idType         String?
+  idNumber       String?
+  idImageUrl     String?
+  selfieUrl      String?
+  idStatus       KycStatus @default(PENDING)
+  address        String?
+  proofOfAddress String?
+  addressStatus  KycStatus @default(PENDING)
+  verifiedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
