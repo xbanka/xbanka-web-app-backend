@@ -1,11 +1,19 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
 import { GatewayModule } from './gateway.module';
 import { ApiResponseInterceptor, ApiExceptionFilter } from '@app/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(GatewayModule);
+
+  // Global Validation
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }));
 
   // Standardize Response Format
   app.useGlobalInterceptors(new ApiResponseInterceptor());

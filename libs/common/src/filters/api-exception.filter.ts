@@ -24,6 +24,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
             message = typeof res === 'string' ? res : res.message || exception.message;
             details = res.error || '';
             errorGroup = 'HTTP_ERROR';
+        } else if (exception.status && typeof exception.status === 'number' && exception.status >= 100 && exception.status < 600) {
+            // Handle RpcException with status
+            status = exception.status;
+            message = exception.message || message;
+            details = exception.details || '';
+            errorGroup = 'MICROSERVICE_ERROR';
         } else {
             details = exception.message || '';
         }

@@ -1,5 +1,8 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { DatabaseService } from '@app/database';
+import * as bcrypt from 'bcrypt';
+import { OnboardingStep } from '@prisma/client';
 
 @Injectable()
 export class AuthServiceService {
@@ -13,20 +16,51 @@ export class AuthServiceService {
     });
 
     if (existingUser) {
-      throw new ConflictException('User with this email already exists');
+      throw new RpcException({
+        message: 'User with this email already exists',
+        status: 409,
+      });
     }
 
-    // Hash password (TODO: use bcrypt)
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     const user = await this.prisma.user.create({
       data: {
         email,
-        password, // TODO: hash this
+        password: hashedPassword,
         referralCode: Math.random().toString(36).substring(7),
         referredBy: referralCode,
+        currentStep: OnboardingStep.SIGNUP,
       },
     });
 
-    return user;
+    // Remove password before returning
+    const { password: _, ...result } = user;
+    return result;
+  }
+
+  async verifyEmail(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new RpcException({
+        message: 'User not found',
+        status: 404,
+      });
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { email },
+      data: {
+        isEmailVerified: true,
+        currentStep: OnboardingStep.EMAIL_VERIFIED,
+      },
+    });
+
+    const { password: _, ...result } = updatedUser;
+    return result;
   }
 }
