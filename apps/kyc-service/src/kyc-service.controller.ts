@@ -10,4 +10,19 @@ export class KycServiceController {
   async verifyBvn(@Payload() data: { userId: string; bvn: string }) {
     return this.kycServiceService.verifyBvn(data.userId, data.bvn);
   }
+
+  @MessagePattern({ cmd: 'update-identity' })
+  async updateIdentity(@Payload() data: any) {
+    return this.kycServiceService.updateIdentity(data);
+  }
+
+  @MessagePattern({ cmd: 'update-selfie' })
+  async updateSelfie(@Payload() data: any) {
+    return this.kycServiceService.updateSelfie(data);
+  }
+
+  @MessagePattern({ cmd: 'update-address' })
+  async updateAddress(@Payload() data: any) {
+    return this.kycServiceService.updateAddress(data);
+  }
 }

@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { DatabaseService } from '@app/database';
 import { IdentityPassService } from '@app/common';
 import { OnboardingStep } from '@prisma/client';
@@ -61,5 +62,93 @@ export class KycServiceService {
     } catch (error) {
       throw new BadRequestException(`BVN verification failed: ${error.message}`);
     }
+  }
+
+  async updateIdentity(data: any) {
+    const { userId, idType, idNumber, idImageUrl } = data;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new RpcException({ message: 'User not found', status: 404 });
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.kycRecord.upsert({
+        where: { userId },
+        create: {
+          userId,
+          idType,
+          idNumber,
+          idImageUrl,
+        },
+        update: {
+          idType,
+          idNumber,
+          idImageUrl,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { currentStep: OnboardingStep.SELFIE },
+      }),
+    ]);
+
+    return { message: 'Identity updated successfully', nextStep: OnboardingStep.SELFIE };
+  }
+
+  async updateSelfie(data: any) {
+    const { userId, selfieUrl } = data;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new RpcException({ message: 'User not found', status: 404 });
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.kycRecord.update({
+        where: { userId },
+        data: { selfieUrl },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { currentStep: OnboardingStep.ADDRESS },
+      }),
+    ]);
+
+    return { message: 'Selfie updated successfully', nextStep: OnboardingStep.ADDRESS };
+  }
+
+  async updateAddress(data: any) {
+    const { userId, address, proofOfAddress } = data;
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new RpcException({ message: 'User not found', status: 404 });
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.kycRecord.update({
+        where: { userId },
+        data: {
+          address,
+          proofOfAddress,
+        },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { currentStep: OnboardingStep.COMPLETED },
+      }),
+    ]);
+
+    return { message: 'Address updated successfully', nextStep: OnboardingStep.COMPLETED };
   }
 }

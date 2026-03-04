@@ -18,13 +18,15 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./apps/xbanka-backend/test/jest-e2e.json",
-    "start:all": "concurrently \"npm run start:dev gateway\" \"npm run start:dev auth-service\" \"npm run start:dev kyc-service\""
+    "start:all": "concurrently \"npm run start:dev gateway\" \"npm run start:dev auth-service\" \"npm run start:dev kyc-service\" \"npm run start:dev user-service\""
   },
   "dependencies": {
     "@libsql/client": "^0.17.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.2",
     "@nestjs/microservices": "^11.1.15",
+    "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.2.6",
     "@prisma/adapter-libsql": "^7.4.2",
@@ -34,6 +36,8 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
     "dotenv": "^17.3.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
     "prisma": "^7.4.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
@@ -49,6 +53,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
     "concurrently": "^9.2.1",
     "eslint": "^9.18.0",

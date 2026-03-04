@@ -15,4 +15,9 @@ export class AuthServiceController {
   async verifyEmail(@Payload() data: { email: string }) {
     return this.authServiceService.verifyEmail(data.email);
   }
+
+  @MessagePattern({ cmd: 'login' })
+  async login(@Payload() data: any) {
+    return this.authServiceService.login(data);
+  }
 }

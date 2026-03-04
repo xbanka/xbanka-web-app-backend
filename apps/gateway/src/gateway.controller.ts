@@ -1,12 +1,13 @@
 import { Controller, Post, Body, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
-import { SignupDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto } from './dto/gateway.dto';
+import { SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto } from './dto/gateway.dto';
 
 @Controller()
 export class GatewayController {
   constructor(
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
+    @Inject('USER_SERVICE') private readonly userClient: ClientProxy,
     @Inject('KYC_SERVICE') private readonly kycClient: ClientProxy,
   ) { }
 
@@ -41,10 +42,81 @@ export class GatewayController {
     return this.authClient.send({ cmd: 'verify-email' }, data);
   }
 
+  @ApiTags('auth')
+  @ApiOperation({
+    summary: 'Authenticate user',
+    description: 'Validates user credentials and returns a JWT access token.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully authenticated',
+    type: ApiResponseDto
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @Post('auth/login')
+  login(@Body() data: LoginDto) {
+    return this.authClient.send({ cmd: 'login' }, data);
+  }
+
+  @ApiTags('profile')
+  @ApiOperation({
+    summary: 'Update basic user profile information',
+    description: 'Updates names, DOB, phone, gender, and country. Moves onboarding to the BVN stage.'
+  })
+  @ApiResponse({ status: 200, type: ApiResponseDto })
+  @Post('users/profile')
+  updateProfile(@Body() data: UpdateProfileDto) {
+    return this.userClient.send({ cmd: 'update-profile' }, data);
+  }
+
+  @ApiTags('profile')
+  @ApiOperation({
+    summary: 'Skip the current onboarding step',
+    description: 'Increments the currentStep for the user without requiring data submission.'
+  })
+  @ApiResponse({ status: 200, type: ApiResponseDto })
+  @Post('users/skip-step')
+  skipStep(@Body() data: SkipStepDto) {
+    return this.userClient.send({ cmd: 'skip-step' }, data);
+  }
+
+  @ApiTags('kyc')
+  @ApiOperation({
+    summary: 'Submit identity document details',
+    description: 'Saves ID type, number, and image URL. Moves onboarding to the SELFIE stage.'
+  })
+  @ApiResponse({ status: 200, type: ApiResponseDto })
+  @Post('kyc/identity')
+  updateIdentity(@Body() data: UpdateIdentityDto) {
+    return this.kycClient.send({ cmd: 'update-identity' }, data);
+  }
+
+  @ApiTags('kyc')
+  @ApiOperation({
+    summary: 'Submit selfie verification',
+    description: 'Saves the selfie image URL and moves onboarding to the ADDRESS stage.'
+  })
+  @ApiResponse({ status: 200, type: ApiResponseDto })
+  @Post('kyc/selfie')
+  updateSelfie(@Body() data: UpdateSelfieDto) {
+    return this.kycClient.send({ cmd: 'update-selfie' }, data);
+  }
+
+  @ApiTags('kyc')
+  @ApiOperation({
+    summary: 'Submit residential address details',
+    description: 'Saves address and proof of residency. Completes the onboarding process.'
+  })
+  @ApiResponse({ status: 200, type: ApiResponseDto })
+  @Post('kyc/address')
+  updateAddress(@Body() data: UpdateAddressDto) {
+    return this.kycClient.send({ cmd: 'update-address' }, data);
+  }
+
   @ApiTags('kyc')
   @ApiOperation({
     summary: 'Verify Bank Verification Number (BVN)',
-    description: 'Integrates with IdentityPass to verify the provided BVN. Moves onboarding to the BVN stage upon success.'
+    description: 'Integrates with IdentityPass to verify the provided BVN. Moves onboarding to the IDENTITY stage upon success.'
   })
   @ApiResponse({
     status: 200,

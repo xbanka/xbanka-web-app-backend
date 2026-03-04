@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
+import { JwtService } from '@nestjs/jwt';
 import { DatabaseService } from '@app/database';
 import * as bcrypt from 'bcrypt';
 import { OnboardingStep } from '@prisma/client';
 
 @Injectable()
 export class AuthServiceService {
-  constructor(private readonly prisma: DatabaseService) { }
+  constructor(
+    private readonly prisma: DatabaseService,
+    private readonly jwtService: JwtService,
+  ) { }
 
   async signup(data: any) {
     const { email, password, referralCode } = data;
@@ -62,5 +66,38 @@ export class AuthServiceService {
 
     const { password: _, ...result } = updatedUser;
     return result;
+  }
+
+  async login(data: any) {
+    const { email, password } = data;
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new RpcException({
+        message: 'Invalid credentials',
+        status: 401,
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new RpcException({
+        message: 'Invalid credentials',
+        status: 401,
+      });
+    }
+
+    const payload = { sub: user.id, email: user.email };
+
+    const { password: _, ...userWithoutPassword } = user;
+
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: userWithoutPassword,
+    };
   }
 }

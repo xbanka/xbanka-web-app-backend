@@ -29,6 +29,23 @@ export class SignupDto {
     referralCode?: string;
 }
 
+export class LoginDto {
+    @ApiProperty({
+        description: 'The email address associated with the account',
+        example: 'user@example.com',
+    })
+    @IsEmail()
+    email: string;
+
+    @ApiProperty({
+        description: 'The account password',
+        example: 'StrongP@ssw0rd123!',
+    })
+    @IsString()
+    @MinLength(8)
+    password: string;
+}
+
 export class VerifyEmailDto {
     @ApiProperty({
         description: 'The email address to verify',
@@ -36,6 +53,86 @@ export class VerifyEmailDto {
     })
     @IsEmail()
     email: string;
+}
+
+export class UpdateProfileDto {
+    @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
+    @IsUUID()
+    userId: string;
+
+    @ApiProperty({ description: 'User first name', example: 'John' })
+    @IsString()
+    @IsNotEmpty()
+    firstName: string;
+
+    @ApiProperty({ description: 'User last name', example: 'Doe' })
+    @IsString()
+    @IsNotEmpty()
+    lastName: string;
+
+    @ApiProperty({ description: 'Date of birth', example: '1990-01-01T00:00:00.000Z' })
+    @IsString()
+    dateOfBirth: string;
+
+    @ApiProperty({ description: 'Phone number', example: '+2348012345678' })
+    @IsString()
+    phoneNumber: string;
+
+    @ApiProperty({ description: 'Gender', example: 'Male' })
+    @IsString()
+    gender: string;
+
+    @ApiProperty({ description: 'Country of residence', example: 'Nigeria' })
+    @IsString()
+    country: string;
+}
+
+export class UpdateIdentityDto {
+    @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
+    @IsUUID()
+    userId: string;
+
+    @ApiProperty({ description: 'Type of ID (e.g. PASSPORT, DRIVERS_LICENSE)', example: 'PASSPORT' })
+    @IsString()
+    idType: string;
+
+    @ApiProperty({ description: 'The ID number', example: 'A12345678' })
+    @IsString()
+    idNumber: string;
+
+    @ApiProperty({ description: 'URL of the ID document image', example: 'https://storage.example.com/id.jpg' })
+    @IsString()
+    idImageUrl: string;
+}
+
+export class UpdateSelfieDto {
+    @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
+    @IsUUID()
+    userId: string;
+
+    @ApiProperty({ description: 'URL of the selfie image', example: 'https://storage.example.com/selfie.jpg' })
+    @IsString()
+    selfieUrl: string;
+}
+
+export class UpdateAddressDto {
+    @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
+    @IsUUID()
+    userId: string;
+
+    @ApiProperty({ description: 'Street address', example: '123 Main St' })
+    @IsString()
+    address: string;
+
+    @ApiProperty({ description: 'URL of the proof of address document', example: 'https://storage.example.com/utility-bill.jpg' })
+    @IsString()
+    proofOfAddress: string;
+}
+
+export class SkipStepDto {
+    @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
+    @IsUUID()
+    userId: string;
 }
 
 export class VerifyBvnDto {
