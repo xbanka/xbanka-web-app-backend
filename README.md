@@ -5,7 +5,7 @@ The core backend system for the XBanka crypto and gift card trading platform. Th
 ## 🏗 Architecture
 
 The backend consists of the following applications (found in the `/apps` directory):
-- **Gateway (`gateway`)**: The main API entry point that routes requests to the appropriate microservices. Runs on port `3000`.
+- **Gateway (`gateway`)**: The main API entry point that routes requests to the appropriate microservices. Runs on port `3010`.
 - **Auth Service (`auth-service`)**: Handles authentication, registration, and JWT token management. Runs on TCP port `3001`.
 - **User Service (`user-service`)**: Manages user profiles, settings, and role-based access control. Runs on TCP port `3002`.
 - **KYC Service (`kyc-service`)**: Handles Know Your Customer (KYC) identity verification flows. Runs on TCP port `3003`.
@@ -104,9 +104,9 @@ npm run test:e2e
 
 ## 📚 API Documentation
 
-Once the Gateway is running (usually on `http://localhost:3000`), you can view the Swagger API documentation by navigating to:
+Once the Gateway is running (usually on `http://localhost:3010`), you can view the Swagger API documentation by navigating to:
 
-👉 **[http://localhost:3000/api/docs](http://localhost:3000/api/docs)**
+👉 **[http://localhost:3010/api/docs](http://localhost:3010/api/docs)**
 
 ---
 
@@ -123,7 +123,8 @@ A `deploy.sh` script is included in the repository to automate deployment to the
 **To deploy:**
 1. Ensure your SSH key (`~/.ssh/id_ed25519_server`) has access to the target server.
 2. Ensure your user is in the `docker` group on the target server.
-3. Run the deployment script from your local machine:
+3. Update your Redirect URIs in the Google Cloud Console to include `http://72.60.215.142:3010/auth/google/callback`.
+4. Run the deployment script from your local machine:
 
 ```bash
 ./deploy.sh
