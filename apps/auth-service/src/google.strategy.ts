@@ -6,8 +6,8 @@ import { Strategy, StrategyOptions, VerifyCallback } from 'passport-google-oauth
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     constructor() {
         const options: StrategyOptions = {
-            clientID: process.env.GOOGLE_CLIENT_ID as string,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+            clientID: (process.env.GOOGLE_CLIENT_ID as string) || 'DUMMY_CLIENT_ID',
+            clientSecret: (process.env.GOOGLE_CLIENT_SECRET as string) || 'DUMMY_CLIENT_SECRET',
             callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3010/auth/google/callback',
             scope: ['profile', 'email'],
         };

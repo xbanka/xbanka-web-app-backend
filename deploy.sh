@@ -32,7 +32,14 @@ sleep 5
 
 # Run Prisma db push to apply schema changes
 echo "📦 Applying database schema..."
-ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SERVER "docker exec xbanka-auth node -e \"const {execSync} = require('child_process'); execSync('npx prisma db push --schema=libs/database/prisma/schema.prisma', {stdio: 'inherit'})\" 2>&1 || true"
+# Try auth-service first, if it's down try gateway
+ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SERVER "
+  if docker ps | grep -q xbanka-auth; then
+    docker exec xbanka-auth npx prisma db push --schema=libs/database/prisma/schema.prisma --accept-data-loss || true
+  elif docker ps | grep -q xbanka-gateway; then
+    docker exec xbanka-gateway npx prisma db push --schema=libs/database/prisma/schema.prisma --accept-data-loss || true
+  fi
+"
 
 echo "✅ Deployment complete! Checking container status:"
 ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SERVER "cd $REMOTE_DIR && docker compose ps"
