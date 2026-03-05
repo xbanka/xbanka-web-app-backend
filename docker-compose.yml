@@ -1,0 +1,40 @@
+services:
+  gateway:
+    build: .
+    container_name: xbanka-gateway
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/gateway/main.js"]
+    restart: always
+
+  auth-service:
+    build: .
+    container_name: xbanka-auth
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/auth-service/main.js"]
+    restart: always
+
+  kyc-service:
+    build: .
+    container_name: xbanka-kyc
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/kyc-service/main.js"]
+    restart: always
+
+  user-service:
+    build: .
+    container_name: xbanka-user
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/user-service/main.js"]
+    restart: always

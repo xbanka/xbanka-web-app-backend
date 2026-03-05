@@ -1,98 +1,157 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# XBanka Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+The core backend system for the XBanka crypto and gift card trading platform. This repository is structured as a **NestJS Monorepo**, containing multiple microservices that communicate with each other.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🏗 Architecture
 
-## Description
+The backend consists of the following applications (found in the `/apps` directory):
+- **Gateway (`gateway`)**: The main API entry point that routes requests to the appropriate microservices. Runs on port `3000`.
+- **Auth Service (`auth-service`)**: Handles authentication, registration, and JWT token management. Runs on TCP port `3001`.
+- **User Service (`user-service`)**: Manages user profiles, settings, and role-based access control. Runs on TCP port `3002`.
+- **KYC Service (`kyc-service`)**: Handles Know Your Customer (KYC) identity verification flows. Runs on TCP port `3003`.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Shared code and database schemas are located in the `/libs` directory:
+- **Common (`@app/common`)**: Shared DTOs, interfaces, filters, and utility functions.
+- **Database (`@app/database`)**: Prisma schema, migrations, and database services.
 
-## Project setup
+---
 
-```bash
-$ npm install
-```
+## 🚀 Getting Started
 
-## Compile and run the project
+### Prerequisites
+
+To run this project, you will need:
+- **Node.js** (v22+ recommended)
+- **npm** (comes with Node)
+- **Docker** (optional, for deployment)
+
+### 1. Installation
+
+Clone the repository and install the dependencies:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone <repository-url>
+cd xbanka-backend
+npm install
 ```
 
-## Run tests
+### 2. Environment Variables
+
+Create a `.env` file in the root directory. You can use a `.env.example` if one exists, but generally you need:
+
+```env
+# Database configuration
+DATABASE_URL="file:./dev.db"  # Example using SQLite via LibSQL/Prisma
+PORT=3000
+
+# Add any other required secrets (JWT_SECRET, API keys, etc.)
+```
+
+### 3. Database Setup
+
+This project uses Prisma ORM. Initialize the database by pushing the schema:
 
 ```bash
-# unit tests
-$ npm run test
+# Generate the Prisma client
+npx prisma generate --schema=libs/database/prisma/schema.prisma
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Push the schema to the database (for development)
+npx prisma db push --schema=libs/database/prisma/schema.prisma
 ```
 
-## Deployment
+### 4. Running the Application
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Because this is a microservices architecture, you need to run the **Gateway** and all relevant **Services** simultaneously.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+**The easiest way to start everything in development mode is:**
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run start:all
+```
+*(This uses `concurrently` to spin up the Gateway, Auth, User, and KYC services at once, with auto-reloading enabled).*
+
+Alternatively, you can start services individually:
+
+```bash
+# Start Gateway
+npx nest start gateway --watch
+
+# Start a specific microservice
+npx nest start auth-service --watch
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Resources
+## 🧪 Testing
 
-Check out a few resources that may come in handy when working with NestJS:
+The repository contains unit and end-to-end tests using Jest.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+# Run all unit tests
+npm run test
 
-## Support
+# Run tests in watch mode
+npm run test:watch
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+# View test coverage
+npm run test:cov
 
-## Stay in touch
+# Run e2e tests
+npm run test:e2e
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
+
+## 📚 API Documentation
+
+Once the Gateway is running (usually on `http://localhost:3000`), you can view the Swagger API documentation by navigating to:
+
+👉 **[http://localhost:3000/api/docs](http://localhost:3000/api/docs)**
+
+---
+
+## 🚢 Deployment
+
+The project is designed to be easily deployed to a Linux server via Docker.
+
+We use a single `docker-compose.yml` file that builds a multi-stage Docker image and runs all the microservices using host networking (`network_mode: "host"`). This ensures they can communicate over their hardcoded local TCP ports without modifying the application code.
+
+### Deployment Script
+
+A `deploy.sh` script is included in the repository to automate deployment to the production server.
+
+**To deploy:**
+1. Ensure your SSH key (`~/.ssh/id_ed25519_server`) has access to the target server.
+2. Ensure your user is in the `docker` group on the target server.
+3. Run the deployment script from your local machine:
+
+```bash
+./deploy.sh
+```
+
+**What the script does:**
+1. Uses `rsync` to copy the local codebase to the server (excluding `node_modules` and `dist`).
+2. SSHs into the server.
+3. Runs `docker compose build` and `docker compose up -d` to spin up the 4 containers:
+   - `xbanka-gateway`
+   - `xbanka-auth`
+   - `xbanka-user`
+   - `xbanka-kyc`
+
+To view logs on the server:
+```bash
+docker compose logs -f
+```
+
+---
+
+## 🛠 Useful Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Builds all applications within the monorepo. |
+| `npm run format` | Runs Prettier to format codebase. |
+| `npm run lint` | Runs ESLint to check for code issues. |
 
 ## License
-
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
