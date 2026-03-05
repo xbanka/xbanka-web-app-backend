@@ -39,7 +39,6 @@ export class AuthServiceService {
       },
     });
 
-    // Remove password before returning
     const { password: _, ...result } = user;
     return result;
   }
@@ -82,6 +81,13 @@ export class AuthServiceService {
       });
     }
 
+    if (!user.password) {
+      throw new RpcException({
+        message: 'This account uses Google Sign-In. Please sign in with Google.',
+        status: 401,
+      });
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
@@ -92,7 +98,70 @@ export class AuthServiceService {
     }
 
     const payload = { sub: user.id, email: user.email };
+    const { password: _, ...userWithoutPassword } = user;
 
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: userWithoutPassword,
+    };
+  }
+
+  async googleLogin(googleUser: {
+    googleId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl: string;
+  }) {
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ googleId: googleUser.googleId }, { email: googleUser.email }],
+      },
+      include: { profile: true },
+    });
+
+    if (!user) {
+      // New user: create account and profile
+      user = await this.prisma.user.create({
+        data: {
+          email: googleUser.email,
+          googleId: googleUser.googleId,
+          isEmailVerified: true,
+          currentStep: OnboardingStep.EMAIL_VERIFIED,
+          referralCode: Math.random().toString(36).substring(7),
+          profile: {
+            create: {
+              firstName: googleUser.firstName,
+              lastName: googleUser.lastName,
+              avatarUrl: googleUser.avatarUrl,
+            },
+          },
+        },
+        include: { profile: true },
+      });
+    } else if (!user.googleId) {
+      // Existing email user: link their Google account
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId: googleUser.googleId,
+          isEmailVerified: true,
+          profile: {
+            upsert: {
+              create: {
+                firstName: googleUser.firstName,
+                lastName: googleUser.lastName,
+                avatarUrl: googleUser.avatarUrl,
+              },
+              update: { avatarUrl: googleUser.avatarUrl },
+            },
+          },
+        },
+        include: { profile: true },
+      });
+    }
+
+    const payload = { sub: user.id, email: user.email };
     const { password: _, ...userWithoutPassword } = user;
 
     return {

@@ -4,9 +4,6 @@ import { AuthServiceService } from './auth-service.service';
 
 @Controller()
 export class AuthServiceController {
-  getHello(): any {
-    throw new Error('Method not implemented.');
-  }
   constructor(private readonly authServiceService: AuthServiceService) { }
 
   @MessagePattern({ cmd: 'signup' })
@@ -22,5 +19,10 @@ export class AuthServiceController {
   @MessagePattern({ cmd: 'login' })
   async login(@Payload() data: any) {
     return this.authServiceService.login(data);
+  }
+
+  @MessagePattern({ cmd: 'google-login' })
+  async googleLogin(@Payload() data: any) {
+    return this.authServiceService.googleLogin(data);
   }
 }

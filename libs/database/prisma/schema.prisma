@@ -26,7 +26,8 @@ enum KycStatus {
 model User {
   id              String         @id @default(uuid())
   email           String         @unique
-  password        String
+  password        String?
+  googleId        String?        @unique
   isEmailVerified Boolean        @default(false)
   currentStep     OnboardingStep @default(SIGNUP)
   referralCode    String?        @unique
@@ -48,6 +49,7 @@ model Profile {
   phoneNumber String?   @unique
   gender      String?
   country     String?
+  avatarUrl   String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }

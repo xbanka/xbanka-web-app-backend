@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto } from './dto/gateway.dto';
 
 @Controller()
@@ -16,11 +17,7 @@ export class GatewayController {
     summary: 'Register a new user account',
     description: 'Creates a new user account with hashed password. Initializes the onboarding process at the SIGNUP stage.'
   })
-  @ApiResponse({
-    status: 201,
-    description: 'User successfully created',
-    type: ApiResponseDto
-  })
+  @ApiResponse({ status: 201, description: 'User successfully created', type: ApiResponseDto })
   @ApiResponse({ status: 409, description: 'Email already exists' })
   @Post('auth/signup')
   signup(@Body() data: SignupDto) {
@@ -32,11 +29,7 @@ export class GatewayController {
     summary: 'Verify user email address',
     description: 'Validates the user\'s email and moves the onboarding process to the EMAIL_VERIFIED stage.'
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Email successfully verified',
-    type: ApiResponseDto
-  })
+  @ApiResponse({ status: 200, description: 'Email successfully verified', type: ApiResponseDto })
   @Post('auth/verify-email')
   verifyEmail(@Body() data: VerifyEmailDto) {
     return this.authClient.send({ cmd: 'verify-email' }, data);
@@ -47,15 +40,36 @@ export class GatewayController {
     summary: 'Authenticate user',
     description: 'Validates user credentials and returns a JWT access token.'
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Successfully authenticated',
-    type: ApiResponseDto
-  })
+  @ApiResponse({ status: 200, description: 'Successfully authenticated', type: ApiResponseDto })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   @Post('auth/login')
   login(@Body() data: LoginDto) {
     return this.authClient.send({ cmd: 'login' }, data);
+  }
+
+  @ApiTags('auth')
+  @ApiOperation({
+    summary: 'Initiate Google Sign-In',
+    description: 'Redirects the user to the Google OAuth2 consent screen. Direct the user\'s browser to this URL to begin the Google login flow.'
+  })
+  @Get('auth/google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth() {
+    // Passport redirects to Google automatically — no body needed
+  }
+
+  @ApiTags('auth')
+  @ApiOperation({
+    summary: 'Google Sign-In Callback',
+    description: 'Google redirects here after login. The backend verifies the user, creates an account if needed, and redirects the client to the frontend with a JWT token.'
+  })
+  @ApiResponse({ status: 302, description: 'Redirects to frontend with access_token in query params' })
+  @Get('auth/google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleAuthCallback(@Req() req: any, @Res() res: any) {
+    const result = await this.authClient.send({ cmd: 'google-login' }, req.user).toPromise();
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}`);
   }
 
   @ApiTags('profile')
@@ -118,11 +132,7 @@ export class GatewayController {
     summary: 'Verify Bank Verification Number (BVN)',
     description: 'Integrates with IdentityPass to verify the provided BVN. Moves onboarding to the IDENTITY stage upon success.'
   })
-  @ApiResponse({
-    status: 200,
-    description: 'BVN successfully verified',
-    type: ApiResponseDto
-  })
+  @ApiResponse({ status: 200, description: 'BVN successfully verified', type: ApiResponseDto })
   @Post('kyc/verify-bvn')
   verifyBvn(@Body() data: VerifyBvnDto) {
     return this.kycClient.send({ cmd: 'verify-bvn' }, data);
