@@ -32,12 +32,14 @@ sleep 5
 
 # Run Prisma db push to apply schema changes
 echo "📦 Applying database schema..."
-# Try auth-service first, if it's down try gateway
 ssh -o StrictHostKeyChecking=no -i $SSH_KEY $SERVER "
+  # Source .env to get variables for Prisma
+  cd $REMOTE_DIR
+  DATABASE_URL=\$(grep DATABASE_URL .env | cut -d '\"' -f 2)
   if docker ps | grep -q xbanka-auth; then
-    docker exec xbanka-auth npx prisma db push --schema=libs/database/prisma/schema.prisma --accept-data-loss || true
+    docker exec -e DATABASE_URL=\"\$DATABASE_URL\" xbanka-auth npx prisma db push --schema=libs/database/prisma/schema.prisma --config=libs/database/prisma.config.ts --accept-data-loss
   elif docker ps | grep -q xbanka-gateway; then
-    docker exec xbanka-gateway npx prisma db push --schema=libs/database/prisma/schema.prisma --accept-data-loss || true
+    docker exec -e DATABASE_URL=\"\$DATABASE_URL\" xbanka-gateway npx prisma db push --schema=libs/database/prisma/schema.prisma --config=libs/database/prisma.config.ts --accept-data-loss
   fi
 "
 

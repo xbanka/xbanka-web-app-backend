@@ -8,7 +8,7 @@ RUN npm ci
 
 # Copy source and generate Prisma client
 COPY . .
-RUN npx prisma generate --schema=libs/database/prisma/schema.prisma
+RUN npx prisma generate --schema=libs/database/prisma/schema.prisma --config=libs/database/prisma.config.ts
 
 # Build all applications
 RUN npx nest build gateway
@@ -24,9 +24,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy Prisma schema and generate client
+# Copy Prisma schema and config and generate client
 COPY libs/database/prisma/schema.prisma ./libs/database/prisma/
-RUN npx prisma generate --schema=libs/database/prisma/schema.prisma
+COPY libs/database/prisma.config.ts ./libs/database/
+RUN npx prisma generate --schema=libs/database/prisma/schema.prisma --config=libs/database/prisma.config.ts
 
 # Copy built artifacts from builder stage
 COPY --from=builder /app/dist ./dist
