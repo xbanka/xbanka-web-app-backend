@@ -6,124 +6,236 @@ datasource db {
   provider = "sqlite"
 }
 
+/// Enum representing the various stages of the user onboarding process.
 enum OnboardingStep {
+  /// Initial stage after account creation.
   SIGNUP
+  /// Email has been verified.
   EMAIL_VERIFIED
+  /// Basic profile information completed.
   BASIC_INFO
+  /// Bank Verification Number provided and verified.
   BVN
+  /// Identity document uploaded.
   IDENTITY
+  /// Selfie for identity verification uploaded.
   SELFIE
+  /// Residential address provided.
   ADDRESS
+  /// All onboarding steps completed.
   COMPLETED
 }
 
+/// Enum representing the status of KYC (Know Your Customer) verification.
 enum KycStatus {
+  /// Verification is in progress.
   PENDING
+  /// Verification successfully completed.
   VERIFIED
+  /// Verification rejected.
   REJECTED
 }
 
+/// Represents a user within the XBanka system.
 model User {
+  /// Unique identifier (UUID).
   id              String         @id @default(uuid())
+  /// User's email address (unique).
   email           String         @unique
+  /// Hashed password (null for Google OAuth users).
   password        String?
+  /// Unique Google OAuth ID.
   googleId        String?        @unique
+  /// Whether the user's email has been verified.
   isEmailVerified Boolean        @default(false)
+  /// Current progress in the onboarding journey.
   currentStep     OnboardingStep @default(SIGNUP)
+  /// Unique referral code for the user.
   referralCode    String?        @unique
+  /// The ID of the user who referred this user.
   referredBy      String?
+  /// Timestamp of account creation.
   createdAt       DateTime       @default(now())
+  /// Timestamp of the last profile update.
   updatedAt       DateTime       @updatedAt
 
+  /// One-to-one relation with the user's profile.
   profile      Profile?
+  /// One-to-one relation with the user's KYC record.
   kyc          KycRecord?
+  /// One-to-many relation with the user's wallets.
   wallets      Wallet[]
+  /// One-to-many relation with the user's linked bank accounts.
   banks        BankDetail[]
+  /// One-to-many relation with the user's transactions.
   transactions Transaction[]
 }
 
+/// Represents a financial wallet for a specific currency.
 model Wallet {
+  /// Unique identifier (UUID).
   id        String   @id @default(uuid())
+  /// ID of the user who owns the wallet.
   userId    String
+  /// Relation to the User model.
   user      User     @relation(fields: [userId], references: [id])
-  currency  String // e.g., "NGN", "USDT", "BTC"
+  /// Wallet currency (e.g., NGN, USDT, BTC).
+  currency  String
+  /// Current balance in the wallet.
   balance   Float    @default(0)
+  /// Timestamp when the wallet was created.
   createdAt DateTime @default(now())
+  /// Timestamp of the last balance update.
   updatedAt DateTime @updatedAt
 
+  /// Ensure a user has only one wallet per currency.
   @@unique([userId, currency])
+  /// Index for faster user-based wallet lookups.
+  @@index([userId])
 }
 
+/// Stores banking details for user withdrawals.
 model BankDetail {
+  /// Unique identifier (UUID).
   id            String   @id @default(uuid())
+  /// ID of the user who owns these bank details.
   userId        String
+  /// Relation to the User model.
   user          User     @relation(fields: [userId], references: [id])
+  /// Name of the bank (e.g., GTBank).
   bankName      String
+  /// The bank account number.
   accountNumber String
+  /// The name registered with the bank account.
   accountName   String
+  /// Whether the bank account has been verified.
   isVerified    Boolean  @default(false)
+  /// Timestamp when the bank detail was added.
   createdAt     DateTime @default(now())
+  /// Timestamp of the last update.
   updatedAt     DateTime @updatedAt
+
+  /// Index for faster bank detail lookups per user.
+  @@index([userId])
 }
 
+/// Types of transactions available in the system.
 enum TransactionType {
+  /// Funding the wallet.
   DEPOSIT
+  /// Withdrawing funds from the wallet.
   WITHDRAWAL
+  /// Receiving funds from another user.
   TRANSFER_IN
+  /// Sending funds to another user.
   TRANSFER_OUT
 }
 
+/// Possible statuses for a transaction.
 enum TransactionStatus {
+  /// Transaction is being processed.
   PENDING
+  /// Transaction completed successfully.
   COMPLETED
+  /// Transaction failed.
   FAILED
 }
 
+/// Records all financial movements within the system.
 model Transaction {
+  /// Unique identifier (UUID).
   id        String            @id @default(uuid())
+  /// ID of the user performing the transaction.
   userId    String
+  /// Relation to the User model.
   user      User              @relation(fields: [userId], references: [id])
+  /// Type of transaction.
   type      TransactionType
+  /// Current status of the transaction.
   status    TransactionStatus @default(PENDING)
+  /// The transaction amount.
   amount    Float
+  /// The currency of the transaction.
   currency  String
+  /// Unique external or internal reference ID.
   reference String            @unique
+  /// Optional note or description for the transaction.
   note      String?
-  metadata  String? // JSON string for additional info
+  /// Extra metadata stored as a JSON string.
+  metadata  String?
+  /// Timestamp when the transaction occurred.
   createdAt DateTime          @default(now())
+  /// Timestamp of the last status update.
   updatedAt DateTime          @updatedAt
+
+  /// Index for faster user-based transaction history lookups.
+  @@index([userId])
+  /// Index for filtering transactions by type.
+  @@index([type])
+  /// Index for filtering transactions by status.
+  @@index([status])
 }
 
+/// Extended personal profile information for a user.
 model Profile {
+  /// Unique identifier (UUID).
   id          String    @id @default(uuid())
+  /// ID of the user this profile belongs to.
   userId      String    @unique
+  /// Relation to the User model.
   user        User      @relation(fields: [userId], references: [id])
+  /// User's legal first name.
   firstName   String?
+  /// User's legal last name.
   lastName    String?
+  /// User's date of birth.
   dateOfBirth DateTime?
+  /// User's unique phone number.
   phoneNumber String?   @unique
+  /// User's gender.
   gender      String?
+  /// User's country of residence.
   country     String?
+  /// URL to the user's avatar/profile picture.
   avatarUrl   String?
+  /// Timestamp when the profile was created.
   createdAt   DateTime  @default(now())
+  /// Timestamp of the last profile update.
   updatedAt   DateTime  @updatedAt
 }
 
+/// Stores identity verification records for a user.
 model KycRecord {
+  /// Unique identifier (UUID).
   id             String    @id @default(uuid())
+  /// ID of the user this KYC record belongs to.
   userId         String    @unique
+  /// Relation to the User model.
   user           User      @relation(fields: [userId], references: [id])
+  /// Bank Verification Number (unique).
   bvn            String?   @unique
+  /// Whether the BVN has been verified.
   bvnVerified    Boolean   @default(false)
+  /// Type of identity document provided.
   idType         String?
+  /// The number on the identity document.
   idNumber       String?
+  /// URL to the uploaded ID document image.
   idImageUrl     String?
+  /// URL to the uploaded identity verification selfie.
   selfieUrl      String?
+  /// Verification status of the ID document.
   idStatus       KycStatus @default(PENDING)
+  /// User's residential address.
   address        String?
+  /// URL to the proof of address document.
   proofOfAddress String?
+  /// Verification status of the address.
   addressStatus  KycStatus @default(PENDING)
+  /// Timestamp when the KYC was fully verified.
   verifiedAt     DateTime?
+  /// Timestamp when the record was created.
   createdAt      DateTime  @default(now())
+  /// Timestamp of the last update.
   updatedAt      DateTime  @updatedAt
 }
