@@ -15,6 +15,8 @@ RUN npx nest build gateway
 RUN npx nest build auth-service
 RUN npx nest build kyc-service
 RUN npx nest build user-service
+RUN npx nest build notification-service
+RUN npx nest build wallet-service
 
 # Production Stage
 FROM node:22-alpine

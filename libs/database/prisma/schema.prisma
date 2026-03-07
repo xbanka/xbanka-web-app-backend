@@ -35,8 +35,63 @@ model User {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  profile Profile?
-  kyc     KycRecord?
+  profile      Profile?
+  kyc          KycRecord?
+  wallets      Wallet[]
+  banks        BankDetail[]
+  transactions Transaction[]
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  currency  String // e.g., "NGN", "USDT", "BTC"
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, currency])
+}
+
+model BankDetail {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  bankName      String
+  accountNumber String
+  accountName   String
+  isVerified    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model Transaction {
+  id        String            @id @default(uuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id])
+  type      TransactionType
+  status    TransactionStatus @default(PENDING)
+  amount    Float
+  currency  String
+  reference String            @unique
+  note      String?
+  metadata  String? // JSON string for additional info
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 }
 
 model Profile {

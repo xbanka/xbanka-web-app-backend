@@ -46,3 +46,27 @@ services:
     volumes:
       - /home/olakay/xbanka-data:/app/data
     restart: always
+
+  wallet-service:
+    build: .
+    container_name: xbanka-wallet
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/wallet-service/main.js"]
+    volumes:
+      - /home/olakay/xbanka-data:/app/data
+    restart: always
+
+  notification-service:
+    build: .
+    container_name: xbanka-notification
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/notification-service/main.js"]
+    volumes:
+      - /home/olakay/xbanka-data:/app/data
+    restart: always

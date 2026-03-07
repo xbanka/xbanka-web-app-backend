@@ -10,7 +10,53 @@ export class GatewayController {
     @Inject('AUTH_SERVICE') private readonly authClient: ClientProxy,
     @Inject('USER_SERVICE') private readonly userClient: ClientProxy,
     @Inject('KYC_SERVICE') private readonly kycClient: ClientProxy,
+    @Inject('NOTIFICATION_SERVICE') private readonly notificationClient: ClientProxy,
+    @Inject('WALLET_SERVICE') private readonly walletClient: ClientProxy,
   ) { }
+
+  @Post('test-notification')
+  async testNotification(@Body() data: { to: string; type: 'email' | 'sms'; message: string }) {
+    const pattern = data.type === 'email' ? 'send_email' : 'send_sms';
+    const payload = data.type === 'email'
+      ? { to: data.to, subject: 'Test Notification', body: data.message }
+      : { to: data.to, message: data.message };
+
+    return this.notificationClient.send(pattern, payload);
+  }
+
+  @Post('test-wallet')
+  async testWallet(@Body() data: { userId: string; action: 'get_wallets' | 'get_banks' }) {
+    const pattern = data.action === 'get_wallets' ? 'get_wallets' : 'get_bank_details';
+    return this.walletClient.send(pattern, { userId: data.userId });
+  }
+
+  @ApiTags('wallet')
+  @UseGuards(AuthGuard('jwt'))
+  @Get('wallets')
+  async getWallets(@Req() req) {
+    return this.walletClient.send('get_wallets', { userId: req.user.id });
+  }
+
+  @ApiTags('wallet')
+  @UseGuards(AuthGuard('jwt'))
+  @Post('wallet/banks')
+  async addBankDetail(@Req() req, @Body() data: { bankName: string; accountNumber: string; accountName: string }) {
+    return this.walletClient.send('add_bank_detail', { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @UseGuards(AuthGuard('jwt'))
+  @Get('wallet/banks')
+  async getBankDetails(@Req() req) {
+    return this.walletClient.send('get_bank_details', { userId: req.user.id });
+  }
+
+  @ApiTags('wallet')
+  @UseGuards(AuthGuard('jwt'))
+  @Get('wallet/transactions')
+  async getTransactions(@Req() req) {
+    return this.walletClient.send('get_transactions', { userId: req.user.id });
+  }
 
   @ApiTags('auth')
   @ApiOperation({

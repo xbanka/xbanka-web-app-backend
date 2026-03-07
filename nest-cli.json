@@ -55,6 +55,15 @@
         "tsConfigPath": "apps/kyc-service/tsconfig.app.json"
       }
     },
+    "notification-service": {
+      "type": "application",
+      "root": "apps/notification-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/notification-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/notification-service/tsconfig.app.json"
+      }
+    },
     "user-service": {
       "type": "application",
       "root": "apps/user-service",
@@ -62,6 +71,15 @@
       "sourceRoot": "apps/user-service/src",
       "compilerOptions": {
         "tsConfigPath": "apps/user-service/tsconfig.app.json"
+      }
+    },
+    "wallet-service": {
+      "type": "application",
+      "root": "apps/wallet-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/wallet-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/wallet-service/tsconfig.app.json"
       }
     },
     "xbanka-backend": {

@@ -25,6 +25,16 @@ import { GoogleStrategy } from './google.strategy';
         transport: Transport.TCP,
         options: { port: 3003 },
       },
+      {
+        name: 'NOTIFICATION_SERVICE',
+        transport: Transport.TCP,
+        options: { port: 3004 },
+      },
+      {
+        name: 'WALLET_SERVICE',
+        transport: Transport.TCP,
+        options: { port: 3005 },
+      },
     ]),
   ],
   controllers: [GatewayController],
