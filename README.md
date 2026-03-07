@@ -123,7 +123,7 @@ A `deploy.sh` script is included in the repository to automate deployment to the
 **To deploy:**
 1. Ensure your SSH key (`~/.ssh/id_ed25519_server`) has access to the target server.
 2. Ensure your user is in the `docker` group on the target server.
-3. Update your Redirect URIs in the Google Cloud Console to include `http://72.60.215.142:3010/auth/google/callback`.
+3. Update your Redirect URIs in the Google Cloud Console to include `http://backend.xbankang.com/auth/google/callback`.
 4. Run the deployment script from your local machine:
 
 ```bash
