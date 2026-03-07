@@ -31,11 +31,33 @@ export class WalletServiceService {
     });
   }
 
-  async getTransactions(userId: string) {
-    this.logger.log(`📜 Fetching transactions for user ${userId}`);
-    return this.prisma.transaction.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+  async getTransactions(userId: string, page: number = 1, limit: number = 10) {
+    this.logger.log(`📜 Fetching transactions for user ${userId} (page: ${page}, limit: ${limit})`);
+    const skip = (page - 1) * limit;
+
+    const [items, totalItems] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { userId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.transaction.count({
+        where: { userId },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      items,
+      meta: {
+        totalItems,
+        itemCount: items.length,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+      },
+    };
   }
 }

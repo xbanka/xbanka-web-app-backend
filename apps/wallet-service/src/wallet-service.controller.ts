@@ -22,7 +22,7 @@ export class WalletServiceController {
   }
 
   @MessagePattern('get_transactions')
-  async handleGetTransactions(@Payload() data: { userId: string }) {
-    return this.walletService.getTransactions(data.userId);
+  async handleGetTransactions(@Payload() data: { userId: string; page?: number; limit?: number }) {
+    return this.walletService.getTransactions(data.userId, data.page, data.limit);
   }
 }

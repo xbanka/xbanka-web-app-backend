@@ -179,3 +179,110 @@ export class ApiResponseDto<T> {
     })
     data: T;
 }
+
+// --- Pagination DTOs ---
+
+export class PaginationQueryDto {
+    @ApiProperty({ description: 'The page number to retrieve', example: 1, default: 1, required: false })
+    @IsOptional()
+    @IsString() // Use string if passed via URL, can be converted or used with @Type
+    page?: string;
+
+    @ApiProperty({ description: 'The number of items per page', example: 10, default: 10, required: false })
+    @IsOptional()
+    @IsString()
+    limit?: string;
+}
+
+export class PaginationMetaDto {
+    @ApiProperty({ description: 'Total number of items', example: 50 })
+    totalItems: number;
+
+    @ApiProperty({ description: 'Items per page', example: 10 })
+    itemCount: number;
+
+    @ApiProperty({ description: 'Number of items per page', example: 10 })
+    itemsPerPage: number;
+
+    @ApiProperty({ description: 'Total number of pages', example: 5 })
+    totalPages: number;
+
+    @ApiProperty({ description: 'Current page number', example: 1 })
+    currentPage: number;
+}
+
+export class PaginatedResponseDto<T> {
+    @ApiProperty({ description: 'The paginated data' })
+    items: T[];
+
+    @ApiProperty({ description: 'Pagination metadata' })
+    meta: PaginationMetaDto;
+}
+
+// --- Wallet & Bank DTOs ---
+
+export class WalletResponseDto {
+    @ApiProperty({ example: 'uuid-123' })
+    id: string;
+
+    @ApiProperty({ example: 'NGN' })
+    currency: string;
+
+    @ApiProperty({ example: 25000.50 })
+    balance: number;
+
+    @ApiProperty({ example: '2026-03-07T10:00:00Z' })
+    createdAt: Date;
+}
+
+export class BankDetailDto {
+    @ApiProperty({ example: 'GTBank', description: 'Name of the bank' })
+    @IsString()
+    @IsNotEmpty()
+    bankName: string;
+
+    @ApiProperty({ example: '0123456789', description: '10-digit account number' })
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(10)
+    accountNumber: string;
+
+    @ApiProperty({ example: 'JOHN DOE', description: 'Account holder name' })
+    @IsString()
+    @IsNotEmpty()
+    accountName: string;
+}
+
+export class BankDetailResponseDto extends BankDetailDto {
+    @ApiProperty({ example: 'uuid-456' })
+    id: string;
+
+    @ApiProperty({ example: true })
+    isVerified: boolean;
+}
+
+export class TransactionResponseDto {
+    @ApiProperty({ example: 'uuid-789' })
+    id: string;
+
+    @ApiProperty({ example: 'DEPOSIT', enum: ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT'] })
+    type: string;
+
+    @ApiProperty({ example: 'COMPLETED', enum: ['PENDING', 'COMPLETED', 'FAILED'] })
+    status: string;
+
+    @ApiProperty({ example: 5000.00 })
+    amount: number;
+
+    @ApiProperty({ example: 'NGN' })
+    currency: string;
+
+    @ApiProperty({ example: 'TXN-REF-123456' })
+    reference: string;
+
+    @ApiProperty({ example: 'Wallet funding' })
+    note: string;
+
+    @ApiProperty({ example: '2026-03-07T10:30:00Z' })
+    createdAt: Date;
+}

@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto } from './dto/gateway.dto';
 
 @Controller()
 export class GatewayController {
@@ -24,38 +24,49 @@ export class GatewayController {
     return this.notificationClient.send(pattern, payload);
   }
 
-  @Post('test-wallet')
-  async testWallet(@Body() data: { userId: string; action: 'get_wallets' | 'get_banks' }) {
-    const pattern = data.action === 'get_wallets' ? 'get_wallets' : 'get_bank_details';
-    return this.walletClient.send(pattern, { userId: data.userId });
-  }
-
   @ApiTags('wallet')
+  @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get all wallets for the authenticated user', description: 'Returns a list of all active wallets (NGN, USDT, BTC) and their current balances.' })
+  @ApiResponse({ status: 200, description: 'List of wallets', type: [WalletResponseDto] })
   @Get('wallets')
   async getWallets(@Req() req) {
     return this.walletClient.send('get_wallets', { userId: req.user.id });
   }
 
   @ApiTags('wallet')
+  @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Add a new bank account', description: 'Links a new bank account to the user\'s profile for withdrawals.' })
+  @ApiResponse({ status: 201, description: 'Bank account added successfully', type: BankDetailResponseDto })
   @Post('wallet/banks')
-  async addBankDetail(@Req() req, @Body() data: { bankName: string; accountNumber: string; accountName: string }) {
+  async addBankDetail(@Req() req, @Body() data: BankDetailDto) {
     return this.walletClient.send('add_bank_detail', { userId: req.user.id, ...data });
   }
 
   @ApiTags('wallet')
+  @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get linked bank accounts', description: 'Returns all bank accounts currently linked to the user\'s profile.' })
+  @ApiResponse({ status: 200, description: 'List of bank accounts', type: [BankDetailResponseDto] })
   @Get('wallet/banks')
   async getBankDetails(@Req() req) {
     return this.walletClient.send('get_bank_details', { userId: req.user.id });
   }
 
   @ApiTags('wallet')
+  @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get transaction history', description: 'Returns a paginated list of all deposits, withdrawals, and transfers.' })
+  @ApiResponse({ status: 200, description: 'Paginated transactions', type: PaginatedResponseDto })
+  @ApiQuery({ type: PaginationQueryDto })
   @Get('wallet/transactions')
-  async getTransactions(@Req() req) {
-    return this.walletClient.send('get_transactions', { userId: req.user.id });
+  async getTransactions(@Req() req, @Query() pagination: PaginationQueryDto) {
+    return this.walletClient.send('get_transactions', {
+      userId: req.user.id,
+      page: parseInt(pagination.page || '1'),
+      limit: parseInt(pagination.limit || '10'),
+    });
   }
 
   @ApiTags('auth')
