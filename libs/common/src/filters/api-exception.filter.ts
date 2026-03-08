@@ -30,6 +30,17 @@ export class ApiExceptionFilter implements ExceptionFilter {
             message = exception.message || message;
             details = exception.details || '';
             errorGroup = 'MICROSERVICE_ERROR';
+        } else if (
+            exception.message &&
+            (exception.message.includes('Unknown authentication strategy') ||
+                exception.message.includes('jwt expired') ||
+                exception.message.includes('No auth token') ||
+                exception.message.includes('invalid signature'))
+        ) {
+            // Handle raw Passport/JWT errors that aren't caught by HttpException
+            status = HttpStatus.UNAUTHORIZED;
+            message = exception.message;
+            errorGroup = 'AUTH_ERROR';
         } else {
             details = exception.message || '';
         }

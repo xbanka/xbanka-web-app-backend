@@ -286,3 +286,92 @@ export class TransactionResponseDto {
     @ApiProperty({ example: '2026-03-07T10:30:00Z' })
     createdAt: Date;
 }
+
+// --- Gift Card DTOs ---
+
+export class GiftCardCategoryDto {
+    @ApiProperty({ example: 'uuid-cat-1' })
+    id: string;
+
+    @ApiProperty({ example: 'PHYSICAL' })
+    name: string;
+}
+
+export class GiftCardRegionDto {
+    @ApiProperty({ example: 'uuid-reg-1' })
+    id: string;
+
+    @ApiProperty({ example: 'USA' })
+    name: string;
+}
+
+export class GiftCardVariantDto {
+    @ApiProperty({ example: 'uuid-var-1' })
+    id: string;
+
+    @ApiProperty({ type: GiftCardCategoryDto })
+    category: GiftCardCategoryDto;
+
+    @ApiProperty({ type: GiftCardRegionDto })
+    region: GiftCardRegionDto;
+
+    @ApiProperty({ example: 750 })
+    rate: number;
+
+    @ApiProperty({ example: 1.2 })
+    dailyChange: number;
+}
+
+export class GiftCardDto {
+    @ApiProperty({ example: 'uuid-brand-1' })
+    id: string;
+
+    @ApiProperty({ example: 'Apple' })
+    name: string;
+
+    @ApiProperty({ example: 'https://example.com/apple.png' })
+    logoUrl: string;
+
+    @ApiProperty({ type: [GiftCardVariantDto] })
+    variants: GiftCardVariantDto[];
+}
+
+export class SellGiftCardDto {
+    @ApiProperty({ example: 'uuid-var-1', description: 'ID of the specific gift card variant' })
+    @IsString()
+    @IsNotEmpty()
+    variantId: string;
+
+    @ApiProperty({ example: 100, description: 'Amount in USD' })
+    @IsNotEmpty()
+    amount: number;
+
+    @ApiProperty({ example: 'XYZ-123-ABC', required: false })
+    @IsOptional()
+    @IsString()
+    code?: string;
+
+    @ApiProperty({ example: 'https://storage.com/proof.jpg', required: false })
+    @IsOptional()
+    @IsString()
+    imageUrl?: string;
+}
+
+export class TradingOverviewDto {
+    @ApiProperty({ example: 23 })
+    cardsSold: number;
+
+    @ApiProperty({ example: 22456235.00 })
+    totalPayout: number;
+
+    @ApiProperty({ example: 'Amazon' })
+    topTradedCard: string;
+}
+
+export class PayoutTrendDto {
+    @ApiProperty({ example: '2026-03-01' })
+    date: string;
+
+    @ApiProperty({ example: 85000 })
+    amount: number;
+}

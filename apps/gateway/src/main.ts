@@ -26,6 +26,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addTag('auth')
     .addTag('kyc')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);

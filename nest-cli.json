@@ -90,6 +90,15 @@
       "compilerOptions": {
         "tsConfigPath": "apps/xbanka-backend/tsconfig.app.json"
       }
+    },
+    "gift-card-service": {
+      "type": "application",
+      "root": "apps/gift-card-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/gift-card-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/gift-card-service/tsconfig.app.json"
+      }
     }
   }
 }

@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent } from '@nestjs/common';
+import { Observable, map } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto } from './dto/gateway.dto';
 
 @Controller()
 export class GatewayController {
@@ -12,6 +13,7 @@ export class GatewayController {
     @Inject('KYC_SERVICE') private readonly kycClient: ClientProxy,
     @Inject('NOTIFICATION_SERVICE') private readonly notificationClient: ClientProxy,
     @Inject('WALLET_SERVICE') private readonly walletClient: ClientProxy,
+    @Inject('GIFT_CARD_SERVICE') private readonly giftCardClient: ClientProxy,
   ) { }
 
   @Post('test-notification')
@@ -193,5 +195,68 @@ export class GatewayController {
   @Post('kyc/verify-bvn')
   verifyBvn(@Body() data: VerifyBvnDto) {
     return this.kycClient.send({ cmd: 'verify-bvn' }, data);
+  }
+
+  @ApiTags('gift-cards')
+  @ApiOperation({ summary: 'Get available gift cards', description: 'Returns a list of all gift cards currently available for trading.' })
+  @ApiResponse({ status: 200, type: [GiftCardDto] })
+  @Get('gift-cards')
+  getGiftCards() {
+    return this.giftCardClient.send('get_gift_cards', {});
+  }
+
+  @ApiTags('gift-cards')
+  @ApiOperation({ summary: 'Get gift card categories', description: 'Returns all active gift card categories (e.g., Physical, Ecode).' })
+  @ApiResponse({ status: 200, type: [GiftCardCategoryDto] })
+  @Get('gift-cards/categories')
+  getCategories() {
+    return this.giftCardClient.send('get_categories', {});
+  }
+
+  @ApiTags('gift-cards')
+  @ApiOperation({ summary: 'Get gift card regions', description: 'Returns all active gift card regions (e.g., USA, UK).' })
+  @ApiResponse({ status: 200, type: [GiftCardRegionDto] })
+  @Get('gift-cards/regions')
+  getRegions() {
+    return this.giftCardClient.send('get_regions', {});
+  }
+
+  @ApiTags('gift-cards')
+  @ApiOperation({ summary: 'Live gift card rates stream', description: 'Server-Sent Events stream for real-time gift card rate updates.' })
+  @Sse('gift-cards/stream')
+  streamGiftCardRates(): Observable<MessageEvent> {
+    return this.giftCardClient.send('get_rate_updates', {}).pipe(
+      map((data) => ({ data } as MessageEvent)),
+    );
+  }
+
+  @ApiTags('gift-cards')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Sell a gift card', description: 'Initiates a trade to sell a gift card. Requires user authentication.' })
+  @ApiResponse({ status: 201, description: 'Trade initiated successfully' })
+  @Post('gift-cards/sell')
+  sellGiftCard(@Req() req, @Body() data: SellGiftCardDto) {
+    return this.giftCardClient.send('sell_gift_card', { userId: req.user.id, payload: data });
+  }
+
+  @ApiTags('dashboard')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get dashboard overview statistics', description: 'Returns aggregated trading stats for the authenticated user.' })
+  @ApiResponse({ status: 200, type: TradingOverviewDto })
+  @Get('dashboard/overview')
+  getDashboardOverview(@Req() req) {
+    return this.giftCardClient.send('get_trading_overview', { userId: req.user.id });
+  }
+
+  @ApiTags('dashboard')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get payout trend for charts', description: 'Returns time-series payout data for dashboard charts.' })
+  @ApiResponse({ status: 200, type: [PayoutTrendDto] })
+  @Get('dashboard/payout-trend')
+  getPayoutTrend(@Req() req) {
+    return this.giftCardClient.send('get_payout_trend', { userId: req.user.id });
   }
 }

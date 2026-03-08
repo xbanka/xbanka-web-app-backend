@@ -60,15 +60,17 @@ model User {
   updatedAt       DateTime       @updatedAt
 
   /// One-to-one relation with the user's profile.
-  profile      Profile?
+  profile        Profile?
   /// One-to-one relation with the user's KYC record.
-  kyc          KycRecord?
+  kyc            KycRecord?
   /// One-to-many relation with the user's wallets.
-  wallets      Wallet[]
+  wallets        Wallet[]
   /// One-to-many relation with the user's linked bank accounts.
-  banks        BankDetail[]
+  banks          BankDetail[]
   /// One-to-many relation with the user's transactions.
-  transactions Transaction[]
+  transactions   Transaction[]
+  /// One-to-many relation with the user's gift card trades.
+  giftCardTrades GiftCardTrade[]
 }
 
 /// Represents a financial wallet for a specific currency.
@@ -238,4 +240,159 @@ model KycRecord {
   createdAt      DateTime  @default(now())
   /// Timestamp of the last update.
   updatedAt      DateTime  @updatedAt
+}
+
+/// Represents a category of gift card (e.g., ECODE, PHYSICAL).
+model GiftCardCategory {
+  /// Unique identifier (UUID).
+  id        String   @id @default(uuid())
+  /// Name of the category.
+  name      String   @unique
+  /// Whether this category is currently active.
+  isActive  Boolean  @default(true)
+  /// Timestamp of creation.
+  createdAt DateTime @default(now())
+  /// Timestamp of update.
+  updatedAt DateTime @updatedAt
+
+  /// One-to-many relation with variants of this category.
+  variants GiftCardVariant[]
+  /// One-to-many relation with trades in this category.
+  trades   GiftCardTrade[]
+}
+
+/// Represents a region for gift cards (e.g., USA, UK, NG).
+model GiftCardRegion {
+  /// Unique identifier (UUID).
+  id        String   @id @default(uuid())
+  /// Name of the region.
+  name      String   @unique
+  /// Whether this region is currently active.
+  isActive  Boolean  @default(true)
+  /// Timestamp of creation.
+  createdAt DateTime @default(now())
+  /// Timestamp of update.
+  updatedAt DateTime @updatedAt
+
+  /// One-to-many relation with variants in this region.
+  variants GiftCardVariant[]
+  /// One-to-many relation with trades in this region.
+  trades   GiftCardTrade[]
+}
+
+/// Possible statuses for a gift card trade.
+enum TradeStatus {
+  /// Trade is being reviewed.
+  PENDING
+  /// Trade completed successfully.
+  SUCCESS
+  /// Trade failed or was rejected.
+  FAILED
+}
+
+/// Represents a gift card brand available for trading (e.g., Apple, Amazon).
+model GiftCard {
+  /// Unique identifier (UUID).
+  id        String   @id @default(uuid())
+  /// Name of the gift card brand.
+  name      String   @unique
+  /// URL to the logo of the brand.
+  logoUrl   String?
+  /// Whether the brand is active on the platform.
+  isActive  Boolean  @default(true)
+  /// Timestamp when added.
+  createdAt DateTime @default(now())
+  /// Timestamp of last update.
+  updatedAt DateTime @updatedAt
+
+  /// One-to-many relation with specific variants of this card.
+  variants GiftCardVariant[]
+  /// One-to-many relation with trades for this card.
+  trades   GiftCardTrade[]
+}
+
+/// Represents a specific combination of brand, category, and region.
+model GiftCardVariant {
+  /// Unique identifier (UUID).
+  id         String           @id @default(uuid())
+  /// ID of the parent gift card brand.
+  cardId     String
+  /// Relation to GiftCard.
+  card       GiftCard         @relation(fields: [cardId], references: [id])
+  /// ID of the category.
+  categoryId String
+  /// Relation to GiftCardCategory.
+  category   GiftCardCategory @relation(fields: [categoryId], references: [id])
+  /// ID of the region.
+  regionId   String
+  /// Relation to GiftCardRegion.
+  region     GiftCardRegion   @relation(fields: [regionId], references: [id])
+
+  /// Current exchange rate for this specific variant (NGN per 1 USD).
+  rate        Float   @default(0)
+  /// Daily percentage change in rate.
+  dailyChange Float   @default(0)
+  /// Whether this specific variant is active for trading.
+  isActive    Boolean @default(true)
+
+  /// Timestamp of creation.
+  createdAt DateTime @default(now())
+  /// Timestamp of update.
+  updatedAt DateTime @updatedAt
+
+  /// One-to-many relation with trades for this specific variant.
+  trades GiftCardTrade[]
+
+  /// Ensure uniqueness of variant combinations.
+  @@unique([cardId, categoryId, regionId])
+  @@index([cardId])
+  @@index([categoryId])
+  @@index([regionId])
+}
+
+/// Records all gift card sell transactions.
+model GiftCardTrade {
+  /// Unique identifier (UUID).
+  id         String           @id @default(uuid())
+  /// ID of the user performing the trade.
+  userId     String
+  /// Relation to the User model.
+  user       User             @relation(fields: [userId], references: [id])
+  /// ID of the gift card brand being traded.
+  cardId     String
+  /// Relation to the GiftCard model.
+  card       GiftCard         @relation(fields: [cardId], references: [id])
+  /// ID of the specific variant.
+  variantId  String
+  /// Relation to the variant.
+  variant    GiftCardVariant  @relation(fields: [variantId], references: [id])
+  /// ID of the category.
+  categoryId String
+  /// Relation to category.
+  category   GiftCardCategory @relation(fields: [categoryId], references: [id])
+  /// ID of the region.
+  regionId   String
+  /// Relation to region.
+  region     GiftCardRegion   @relation(fields: [regionId], references: [id])
+
+  /// The amount in USD.
+  amount    Float       @default(0)
+  /// The estimated payout in NGN.
+  payout    Float       @default(0)
+  /// The actual gift card code (for E-CODE).
+  code      String?
+  /// URL to the uploaded screenshot/proof.
+  imageUrl  String?
+  /// Current status of the trade.
+  status    TradeStatus @default(PENDING)
+  /// Timestamp when the trade was initiated.
+  createdAt DateTime    @default(now())
+  /// Timestamp of the last status update.
+  updatedAt DateTime    @updatedAt
+
+  /// Indexes for faster lookups.
+  @@index([userId])
+  @@index([cardId])
+  @@index([variantId])
+  @@index([status])
 }
