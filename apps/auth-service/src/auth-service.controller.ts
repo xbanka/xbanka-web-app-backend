@@ -12,8 +12,8 @@ export class AuthServiceController {
   }
 
   @MessagePattern({ cmd: 'verify-email' })
-  async verifyEmail(@Payload() data: { email: string }) {
-    return this.authServiceService.verifyEmail(data.email);
+  async verifyEmail(@Payload() data: { token: string }) {
+    return this.authServiceService.verifyEmail(data.token);
   }
 
   @MessagePattern({ cmd: 'login' })
@@ -24,5 +24,10 @@ export class AuthServiceController {
   @MessagePattern({ cmd: 'google-login' })
   async googleLogin(@Payload() data: any) {
     return this.authServiceService.googleLogin(data);
+  }
+
+  @MessagePattern({ cmd: 'resend-verification' })
+  async resendVerification(@Payload() data: { email: string; redirectUrl: string }) {
+    return this.authServiceService.resendVerification(data);
   }
 }

@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthServiceController } from './auth-service.controller';
 import { AuthServiceService } from './auth-service.service';
 import { DatabaseModule } from '@app/database';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 @Module({
   imports: [
     DatabaseModule,
@@ -12,6 +13,13 @@ import { DatabaseModule } from '@app/database';
       secret: process.env.JWT_SECRET || 'super-secret-key-change-me',
       signOptions: { expiresIn: '1d' },
     }),
+    ClientsModule.register([
+      {
+        name: 'NOTIFICATION_SERVICE',
+        transport: Transport.TCP,
+        options: { port: 3004 },
+      },
+    ]),
   ],
   controllers: [AuthServiceController],
   providers: [AuthServiceService],

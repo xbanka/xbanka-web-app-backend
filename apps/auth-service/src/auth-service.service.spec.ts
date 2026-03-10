@@ -14,6 +14,7 @@ describe('AuthServiceService', () => {
     const mockPrisma = {
         user: {
             findUnique: jest.fn(),
+            findFirst: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
         },
@@ -23,12 +24,17 @@ describe('AuthServiceService', () => {
         signAsync: jest.fn(),
     };
 
+    const mockNotificationClient = {
+        emit: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 AuthServiceService,
                 { provide: DatabaseService, useValue: mockPrisma },
                 { provide: JwtService, useValue: mockJwtService },
+                { provide: 'NOTIFICATION_SERVICE', useValue: mockNotificationClient },
             ],
         }).compile();
 
@@ -49,6 +55,7 @@ describe('AuthServiceService', () => {
         const signupData = {
             email: 'test@example.com',
             password: 'password123',
+            redirectUrl: 'http://localhost:3000/verify',
         };
 
         it('should throw RpcException if user already exists', async () => {
@@ -58,7 +65,7 @@ describe('AuthServiceService', () => {
             expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({ where: { email: signupData.email } });
         });
 
-        it('should hash password and create user', async () => {
+        it('should hash password and create user and emit email event', async () => {
             mockPrisma.user.findUnique.mockResolvedValue(null);
             mockPrisma.user.create.mockResolvedValue({
                 id: '1',
@@ -73,6 +80,10 @@ describe('AuthServiceService', () => {
             expect(result).not.toHaveProperty('password');
             expect(result.email).toBe(signupData.email);
             expect(mockPrisma.user.create).toHaveBeenCalled();
+            expect(mockNotificationClient.emit).toHaveBeenCalledWith('send_email', expect.objectContaining({
+                to: signupData.email,
+                subject: expect.stringContaining('Welcome'),
+            }));
         });
     });
 
@@ -118,34 +129,34 @@ describe('AuthServiceService', () => {
     });
 
     describe('verifyEmail', () => {
-        const email = 'test@example.com';
+        const token = 'test-token';
 
         it('should update user and mark email as verified', async () => {
-            mockPrisma.user.findUnique.mockResolvedValue({ id: '1', email });
+            const user = { id: '1', email: 'test@example.com', verificationToken: token };
+            mockPrisma.user.findFirst.mockResolvedValue(user);
             mockPrisma.user.update.mockResolvedValue({
-                id: '1',
-                email,
+                ...user,
                 isEmailVerified: true,
                 currentStep: OnboardingStep.EMAIL_VERIFIED,
             });
 
-            const result = await service.verifyEmail(email);
+            const result = await service.verifyEmail(token);
 
             expect(result.isEmailVerified).toBe(true);
             expect(result.currentStep).toBe(OnboardingStep.EMAIL_VERIFIED);
             expect(mockPrisma.user.update).toHaveBeenCalledWith({
-                where: { email },
-                data: {
+                where: { id: user.id },
+                data: expect.objectContaining({
                     isEmailVerified: true,
                     currentStep: OnboardingStep.EMAIL_VERIFIED,
-                },
+                }),
             });
         });
 
-        it('should throw RpcException if user not found', async () => {
-            mockPrisma.user.findUnique.mockResolvedValue(null);
+        it('should throw RpcException if token not found', async () => {
+            mockPrisma.user.findFirst.mockResolvedValue(null);
 
-            await expect(service.verifyEmail(email)).rejects.toThrow(RpcException);
+            await expect(service.verifyEmail(token)).rejects.toThrow(RpcException);
         });
     });
 });

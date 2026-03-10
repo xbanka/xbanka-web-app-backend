@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, MinLength, IsOptional, IsUUID } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, MinLength, IsOptional, IsUUID, IsNumberString, Length } from 'class-validator';
 
 export class SignupDto {
     @ApiProperty({
@@ -7,7 +7,8 @@ export class SignupDto {
         example: 'user@example.com',
         format: 'email',
     })
-    @IsEmail()
+    @IsNotEmpty({ message: 'Email is required' })
+    @IsEmail({}, { message: 'Invalid email format' })
     email: string;
 
     @ApiProperty({
@@ -15,18 +16,21 @@ export class SignupDto {
         example: 'StrongP@ssw0rd123!',
         minLength: 8,
     })
+    @IsNotEmpty({ message: 'Password is required' })
     @IsString()
-    @MinLength(8)
+    @MinLength(8, { message: 'Password must be at least 8 characters' })
     password: string;
 
-    @ApiProperty({
-        description: 'Optional referral code from another user',
-        example: 'referral123',
-        required: false,
-    })
     @IsOptional()
     @IsString()
     referralCode?: string;
+
+    @ApiProperty({
+        description: 'Frontend URL to redirect the user after email verification',
+        example: 'https://app.xbankang.com/verify-email',
+    })
+    @IsString()
+    redirectUrl: string;
 }
 
 export class LoginDto {
@@ -48,11 +52,13 @@ export class LoginDto {
 
 export class VerifyEmailDto {
     @ApiProperty({
-        description: 'The email address to verify',
-        example: 'user@example.com',
+        description: 'The hexadecimal verification token sent via email',
+        example: 'a1b2c3d4e5f6...',
     })
-    @IsEmail()
-    email: string;
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(32)
+    token: string;
 }
 
 export class UpdateProfileDto {
@@ -99,20 +105,12 @@ export class UpdateIdentityDto {
     @ApiProperty({ description: 'The ID number', example: 'A12345678' })
     @IsString()
     idNumber: string;
-
-    @ApiProperty({ description: 'URL of the ID document image', example: 'https://storage.example.com/id.jpg' })
-    @IsString()
-    idImageUrl: string;
 }
 
 export class UpdateSelfieDto {
     @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
     @IsUUID()
     userId: string;
-
-    @ApiProperty({ description: 'URL of the selfie image', example: 'https://storage.example.com/selfie.jpg' })
-    @IsString()
-    selfieUrl: string;
 }
 
 export class UpdateAddressDto {
@@ -123,10 +121,6 @@ export class UpdateAddressDto {
     @ApiProperty({ description: 'Street address', example: '123 Main St' })
     @IsString()
     address: string;
-
-    @ApiProperty({ description: 'URL of the proof of address document', example: 'https://storage.example.com/utility-bill.jpg' })
-    @IsString()
-    proofOfAddress: string;
 }
 
 export class SkipStepDto {
@@ -149,9 +143,10 @@ export class VerifyBvnDto {
         minLength: 11,
         maxLength: 11,
     })
-    @IsString()
+    @IsNumberString()
     @IsNotEmpty()
-    @MinLength(11)
+    @Length(11, 11, { message: 'BVN must be exactly 11 digits' })
+    @IsString()
     bvn: string;
 }
 
@@ -374,4 +369,20 @@ export class PayoutTrendDto {
 
     @ApiProperty({ example: 85000 })
     amount: number;
+}
+
+export class ResendVerificationDto {
+    @ApiProperty({
+        description: 'The email address associated with the account',
+        example: 'user@example.com',
+    })
+    @IsEmail()
+    email: string;
+
+    @ApiProperty({
+        description: 'Frontend URL to redirect the user after email verification',
+        example: 'https://app.xbankang.com/verify-email',
+    })
+    @IsString()
+    redirectUrl: string;
 }

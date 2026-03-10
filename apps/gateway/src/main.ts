@@ -8,6 +8,13 @@ import { ApiResponseInterceptor, ApiExceptionFilter } from '@app/common';
 async function bootstrap() {
   const app = await NestFactory.create(GatewayModule);
 
+  // Enable CORS
+  app.enableCors({
+    origin: 'http://localhost:3000',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   // Global Validation
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,

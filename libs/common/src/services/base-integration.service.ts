@@ -28,17 +28,25 @@ export abstract class BaseIntegrationService {
     }
 
     protected async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+        const headers = {
+            Authorization: `Bearer ${this.apiKey}`,
+            ...config?.headers,
+        };
         const response: AxiosResponse<T> = await this.axios.get(`${this.baseUrl}${url}`, {
             ...config,
-            headers: { ...config?.headers, Authorization: `Bearer ${this.apiKey}` },
+            headers,
         });
         return response.data;
     }
 
     protected async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+        const headers = {
+            Authorization: `Bearer ${this.apiKey}`,
+            ...config?.headers,
+        };
         const response: AxiosResponse<T> = await this.axios.post(`${this.baseUrl}${url}`, data, {
             ...config,
-            headers: { ...config?.headers, Authorization: `Bearer ${this.apiKey}` },
+            headers,
         });
         return response.data;
     }

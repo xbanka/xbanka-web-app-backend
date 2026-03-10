@@ -39,25 +39,29 @@ enum KycStatus {
 /// Represents a user within the XBanka system.
 model User {
   /// Unique identifier (UUID).
-  id              String         @id @default(uuid())
+  id                         String         @id @default(uuid())
   /// User's email address (unique).
-  email           String         @unique
+  email                      String         @unique
   /// Hashed password (null for Google OAuth users).
-  password        String?
+  password                   String?
   /// Unique Google OAuth ID.
-  googleId        String?        @unique
+  googleId                   String?        @unique
   /// Whether the user's email has been verified.
-  isEmailVerified Boolean        @default(false)
+  isEmailVerified            Boolean        @default(false)
+  /// Token used for email verification.
+  verificationToken          String?
+  /// Expiration timestamp for the verification token.
+  verificationTokenExpiresAt DateTime?
   /// Current progress in the onboarding journey.
-  currentStep     OnboardingStep @default(SIGNUP)
+  currentStep                OnboardingStep @default(SIGNUP)
   /// Unique referral code for the user.
-  referralCode    String?        @unique
+  referralCode               String?        @unique
   /// The ID of the user who referred this user.
-  referredBy      String?
+  referredBy                 String?
   /// Timestamp of account creation.
-  createdAt       DateTime       @default(now())
+  createdAt                  DateTime       @default(now())
   /// Timestamp of the last profile update.
-  updatedAt       DateTime       @updatedAt
+  updatedAt                  DateTime       @updatedAt
 
   /// One-to-one relation with the user's profile.
   profile        Profile?
@@ -234,6 +238,8 @@ model KycRecord {
   proofOfAddress String?
   /// Verification status of the address.
   addressStatus  KycStatus @default(PENDING)
+  /// Encrypted JSON response from the external verification provider.
+  bvnResponse    String?
   /// Timestamp when the KYC was fully verified.
   verifiedAt     DateTime?
   /// Timestamp when the record was created.

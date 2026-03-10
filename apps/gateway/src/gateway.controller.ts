@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Observable, map } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto } from './dto/gateway.dto';
+import { GoogleAuthGuard } from './google-auth.guard';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto } from './dto/gateway.dto';
+import { S3Service } from '@app/common';
 
 @Controller()
 export class GatewayController {
@@ -14,6 +17,7 @@ export class GatewayController {
     @Inject('NOTIFICATION_SERVICE') private readonly notificationClient: ClientProxy,
     @Inject('WALLET_SERVICE') private readonly walletClient: ClientProxy,
     @Inject('GIFT_CARD_SERVICE') private readonly giftCardClient: ClientProxy,
+    private readonly s3Service: S3Service,
   ) { }
 
   @Post('test-notification')
@@ -91,7 +95,7 @@ export class GatewayController {
   @ApiResponse({ status: 200, description: 'Email successfully verified', type: ApiResponseDto })
   @Post('auth/verify-email')
   verifyEmail(@Body() data: VerifyEmailDto) {
-    return this.authClient.send({ cmd: 'verify-email' }, data);
+    return this.authClient.send({ cmd: 'verify-email' }, { token: data.token });
   }
 
   @ApiTags('auth')
@@ -108,11 +112,22 @@ export class GatewayController {
 
   @ApiTags('auth')
   @ApiOperation({
+    summary: 'Resend email verification token',
+    description: 'Generates a new verification token and sends it to the user\'s email.',
+  })
+  @ApiResponse({ status: 200, description: 'Verification email resent', type: ApiResponseDto })
+  @Post('auth/resend-verification')
+  resendVerification(@Body() data: ResendVerificationDto) {
+    return this.authClient.send({ cmd: 'resend-verification' }, data);
+  }
+
+  @ApiTags('auth')
+  @ApiOperation({
     summary: 'Initiate Google Sign-In',
     description: 'Redirects the user to the Google OAuth2 consent screen. Direct the user\'s browser to this URL to begin the Google login flow.'
   })
   @Get('auth/google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuth() {
     // Passport redirects to Google automatically — no body needed
   }
@@ -124,11 +139,21 @@ export class GatewayController {
   })
   @ApiResponse({ status: 302, description: 'Redirects to frontend with access_token in query params' })
   @Get('auth/google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   async googleAuthCallback(@Req() req: any, @Res() res: any) {
     const result = await this.authClient.send({ cmd: 'google-login' }, req.user).toPromise();
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${result.access_token}`);
+    // Retrieve the original redirect url from the state query parameter
+    const redirectUrlStr = req.query.state || (process.env.FRONTEND_URL || 'http://localhost:3001') + '/auth/callback';
+
+    try {
+      const redirectUrl = new URL(redirectUrlStr);
+      // Append token to the URL, handling existing query parameters safely
+      redirectUrl.searchParams.append('token', result.access_token);
+      res.redirect(redirectUrl.toString());
+    } catch (e) {
+      // Fallback in case state is somehow an invalid URL
+      res.redirect(`${redirectUrlStr}?token=${result.access_token}`);
+    }
   }
 
   @ApiTags('profile')
@@ -156,34 +181,58 @@ export class GatewayController {
   @ApiTags('kyc')
   @ApiOperation({
     summary: 'Submit identity document details',
-    description: 'Saves ID type, number, and image URL. Moves onboarding to the SELFIE stage.'
+    description: 'Saves ID type, number, and uploads image to S3. Moves onboarding to the SELFIE stage.'
   })
   @ApiResponse({ status: 200, type: ApiResponseDto })
   @Post('kyc/identity')
-  updateIdentity(@Body() data: UpdateIdentityDto) {
-    return this.kycClient.send({ cmd: 'update-identity' }, data);
+  @UseInterceptors(FileInterceptor('idImage'))
+  async updateIdentity(
+    @Body() data: UpdateIdentityDto,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    let idImageUrl = '';
+    if (file) {
+      idImageUrl = await this.s3Service.uploadFile(file, 'identity');
+    }
+    return this.kycClient.send({ cmd: 'update-identity' }, { ...data, idImageUrl });
   }
 
   @ApiTags('kyc')
   @ApiOperation({
     summary: 'Submit selfie verification',
-    description: 'Saves the selfie image URL and moves onboarding to the ADDRESS stage.'
+    description: 'Uploads selfie image to S3 and moves onboarding to the ADDRESS stage.'
   })
   @ApiResponse({ status: 200, type: ApiResponseDto })
   @Post('kyc/selfie')
-  updateSelfie(@Body() data: UpdateSelfieDto) {
-    return this.kycClient.send({ cmd: 'update-selfie' }, data);
+  @UseInterceptors(FileInterceptor('selfieImage'))
+  async updateSelfie(
+    @Body() data: UpdateSelfieDto,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    let selfieUrl = '';
+    if (file) {
+      selfieUrl = await this.s3Service.uploadFile(file, 'selfie');
+    }
+    return this.kycClient.send({ cmd: 'update-selfie' }, { ...data, selfieUrl });
   }
 
   @ApiTags('kyc')
   @ApiOperation({
     summary: 'Submit residential address details',
-    description: 'Saves address and proof of residency. Completes the onboarding process.'
+    description: 'Saves address and uploads proof of residency to S3. Completes the onboarding process.'
   })
   @ApiResponse({ status: 200, type: ApiResponseDto })
   @Post('kyc/address')
-  updateAddress(@Body() data: UpdateAddressDto) {
-    return this.kycClient.send({ cmd: 'update-address' }, data);
+  @UseInterceptors(FileInterceptor('proofOfAddressImage'))
+  async updateAddress(
+    @Body() data: UpdateAddressDto,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    let proofOfAddress = '';
+    if (file) {
+      proofOfAddress = await this.s3Service.uploadFile(file, 'address');
+    }
+    return this.kycClient.send({ cmd: 'update-address' }, { ...data, proofOfAddress });
   }
 
   @ApiTags('kyc')
