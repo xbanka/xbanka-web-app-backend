@@ -176,7 +176,7 @@ export class KycServiceService {
   }
 
   async updateAddress(data: any) {
-    const { userId, address, proofOfAddress } = data;
+    const { userId, address, landmark, country, state, documentType, proofOfAddress } = data;
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -191,8 +191,15 @@ export class KycServiceService {
         where: { userId },
         data: {
           address,
+          addressLandmark: landmark,
+          addressDocumentType: documentType,
           proofOfAddress,
         },
+      }),
+      this.prisma.profile.upsert({
+        where: { userId },
+        create: { userId, country, state },
+        update: { country, state },
       }),
       this.prisma.user.update({
         where: { id: userId },

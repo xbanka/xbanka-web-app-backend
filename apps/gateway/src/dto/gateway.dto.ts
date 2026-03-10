@@ -120,7 +120,28 @@ export class UpdateAddressDto {
 
     @ApiProperty({ description: 'Street address', example: '123 Main St' })
     @IsString()
+    @IsNotEmpty()
     address: string;
+
+    @ApiProperty({ description: 'Popular landmark near the address', example: 'Beside Total Station', required: false })
+    @IsString()
+    @IsOptional()
+    landmark?: string;
+
+    @ApiProperty({ description: 'Country of residence', example: 'Nigeria' })
+    @IsString()
+    @IsNotEmpty()
+    country: string;
+
+    @ApiProperty({ description: 'State of residence', example: 'Lagos' })
+    @IsString()
+    @IsNotEmpty()
+    state: string;
+
+    @ApiProperty({ description: 'Type of document (e.g. Utility Bill, Bank Statement)', example: 'Utility Bill' })
+    @IsString()
+    @IsNotEmpty()
+    documentType: string;
 }
 
 export class SkipStepDto {

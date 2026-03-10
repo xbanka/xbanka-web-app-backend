@@ -206,6 +206,8 @@ model Profile {
   gender      String?
   /// User's country of residence.
   country     String?
+  /// User's state of residence.
+  state       String?
   /// URL to the user's avatar/profile picture.
   avatarUrl   String?
   /// Timestamp when the profile was created.
@@ -217,39 +219,43 @@ model Profile {
 /// Stores identity verification records for a user.
 model KycRecord {
   /// Unique identifier (UUID).
-  id             String    @id @default(uuid())
+  id                  String    @id @default(uuid())
   /// ID of the user this KYC record belongs to.
-  userId         String    @unique
+  userId              String    @unique
   /// Relation to the User model.
-  user           User      @relation(fields: [userId], references: [id])
+  user                User      @relation(fields: [userId], references: [id])
   /// Bank Verification Number (unique).
-  bvn            String?   @unique
+  bvn                 String?   @unique
   /// Whether the BVN has been verified.
-  bvnVerified    Boolean   @default(false)
+  bvnVerified         Boolean   @default(false)
   /// Type of identity document provided.
-  idType         String?
+  idType              String?
   /// The number on the identity document.
-  idNumber       String?
+  idNumber            String?
   /// URL to the uploaded ID document image.
-  idImageUrl     String?
+  idImageUrl          String?
   /// URL to the uploaded identity verification selfie.
-  selfieUrl      String?
+  selfieUrl           String?
   /// Verification status of the ID document.
-  idStatus       KycStatus @default(PENDING)
+  idStatus            KycStatus @default(PENDING)
   /// User's residential address.
-  address        String?
+  address             String?
+  /// Residential address landmark.
+  addressLandmark     String?
+  /// Type of document used for proof of address.
+  addressDocumentType String?
   /// URL to the proof of address document.
-  proofOfAddress String?
+  proofOfAddress      String?
   /// Verification status of the address.
-  addressStatus  KycStatus @default(PENDING)
+  addressStatus       KycStatus @default(PENDING)
   /// Encrypted JSON response from the external verification provider.
-  bvnResponse    String?
+  bvnResponse         String?
   /// Timestamp when the KYC was fully verified.
-  verifiedAt     DateTime?
+  verifiedAt          DateTime?
   /// Timestamp when the record was created.
-  createdAt      DateTime  @default(now())
+  createdAt           DateTime  @default(now())
   /// Timestamp of the last update.
-  updatedAt      DateTime  @updatedAt
+  updatedAt           DateTime  @updatedAt
 }
 
 /// Represents a category of gift card (e.g., ECODE, PHYSICAL).
