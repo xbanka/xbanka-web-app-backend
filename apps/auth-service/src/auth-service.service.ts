@@ -120,7 +120,8 @@ export class AuthServiceService {
   }
 
   async login(data: any) {
-    const { email, password } = data;
+    const { email, password, metadata } = data;
+    const { deviceId, deviceName, deviceType, ipAddress, userAgent } = metadata || {};
 
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -149,12 +150,73 @@ export class AuthServiceService {
       });
     }
 
-    const payload = { sub: user.id, email: user.email };
+    // --- Device & Session Logic ---
+    let device = await this.prisma.device.findUnique({
+      where: { userId_deviceId: { userId: user.id, deviceId: deviceId || 'unknown' } },
+    });
+
+    if (!device) {
+      device = await this.prisma.device.create({
+        data: {
+          userId: user.id,
+          deviceId: deviceId || 'unknown',
+          name: deviceName || 'Unknown Device',
+          type: deviceType || 'WEB',
+          isTrusted: false, // Must verify via OTP
+        },
+      });
+    }
+
+    if (!device.isTrusted) {
+      // Generate OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+
+      await this.prisma.device.update({
+        where: { id: device.id },
+        data: {
+          verificationToken: otp,
+          verificationTokenExpiresAt: expiresAt,
+        },
+      });
+
+      // Send OTP Email
+      this.notificationClient.emit('send_email', {
+        to: user.email,
+        subject: 'XBanka - New Device Login OTP',
+        body: `<p>Your verification code for the new device <b>${device.name}</b> is: <h2>${otp}</h2></p>`,
+      });
+
+      return {
+        status: 'DEVICE_VERIFICATION_REQUIRED',
+        deviceId: device.deviceId,
+        message: 'Verification code sent to email',
+      };
+    }
+
+    // Create Session
+    const session = await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        deviceId: device.id,
+        ipAddress,
+        userAgent,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      },
+    });
+
+    const payload = { sub: user.id, email: user.email, sid: session.id };
     const { password: _, ...userWithoutPassword } = user;
 
     return {
       access_token: await this.jwtService.signAsync(payload),
       user: userWithoutPassword,
+      session: {
+        id: session.id,
+        deviceName: device.name,
+        lastActiveAt: session.lastActiveAt,
+      },
     };
   }
 
@@ -278,5 +340,69 @@ export class AuthServiceService {
     console.log(`[Resend Verification] New token for ${email}: ${verificationToken}. Redirect URL: ${redirectUrl}`);
 
     return { message: 'Verification email resent successfully' };
+  }
+
+  async verifyDevice(data: { userId: string; deviceId: string; code: string }) {
+    const { userId, deviceId, code } = data;
+
+    const device = await this.prisma.device.findFirst({
+      where: { userId, deviceId },
+    });
+
+    if (!device || device.verificationToken !== code) {
+      throw new RpcException({ message: 'Invalid verification code', status: 400 });
+    }
+
+    if (device.verificationTokenExpiresAt && device.verificationTokenExpiresAt < new Date()) {
+      throw new RpcException({ message: 'Verification code expired', status: 400 });
+    }
+
+    await this.prisma.device.update({
+      where: { id: device.id },
+      data: {
+        isTrusted: true,
+        verificationToken: null,
+        verificationTokenExpiresAt: null,
+      },
+    });
+
+    return { message: 'Device verified and trusted successfully' };
+  }
+
+  async getSessions(userId: string) {
+    return this.prisma.session.findMany({
+      where: { userId, isRevoked: false },
+      include: { device: true },
+      orderBy: { lastActiveAt: 'desc' },
+    });
+  }
+
+  async revokeSession(data: { userId: string; sessionId: string }) {
+    await this.prisma.session.updateMany({
+      where: { id: data.sessionId, userId: data.userId },
+      data: { isRevoked: true },
+    });
+    return { message: 'Session revoked successfully' };
+  }
+
+  async getDevices(userId: string) {
+    return this.prisma.device.findMany({
+      where: { userId },
+      orderBy: { lastUsedAt: 'desc' },
+    });
+  }
+
+  async removeDevice(data: { userId: string; deviceId: string }) {
+    await this.prisma.device.deleteMany({
+      where: { id: data.deviceId, userId: data.userId },
+    });
+    return { message: 'Device removed successfully' };
+  }
+
+  async validateSession(data: { sessionId: string; userId: string }) {
+    const session = await this.prisma.session.findFirst({
+      where: { id: data.sessionId, userId: data.userId, isRevoked: false },
+    });
+    return !!session;
   }
 }

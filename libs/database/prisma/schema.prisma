@@ -75,6 +75,10 @@ model User {
   transactions   Transaction[]
   /// One-to-many relation with the user's gift card trades.
   giftCardTrades GiftCardTrade[]
+  /// One-to-many relation with the user's registered devices.
+  devices        Device[]
+  /// One-to-many relation with the user's active/past sessions.
+  sessions       Session[]
 }
 
 /// Represents a financial wallet for a specific currency.
@@ -401,4 +405,46 @@ model GiftCardTrade {
   @@index([cardId])
   @@index([variantId])
   @@index([status])
+}
+
+/// Represents a device used by a user.
+model Device {
+  id        String  @id @default(uuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  deviceId  String // Client-side generated unique ID
+  name      String? // e.g., "Samsung S21"
+  type      String? // e.g., "MOBILE", "WEB"
+  isTrusted Boolean @default(false)
+
+  // For OTP verification
+  verificationToken          String?
+  verificationTokenExpiresAt DateTime?
+
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sessions Session[]
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+}
+
+/// Represents an active or past user session.
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  deviceId     String?
+  device       Device?  @relation(fields: [deviceId], references: [id])
+  ipAddress    String?
+  userAgent    String?
+  location     String?
+  isRevoked    Boolean  @default(false)
+  expiresAt    DateTime
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
 }

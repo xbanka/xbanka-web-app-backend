@@ -99,15 +99,18 @@ export class GatewayController {
   }
 
   @ApiTags('auth')
-  @ApiOperation({
-    summary: 'Authenticate user',
-    description: 'Validates user credentials and returns a JWT access token.'
-  })
-  @ApiResponse({ status: 200, description: 'Successfully authenticated', type: ApiResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiOperation({ summary: 'Login with email and password' })
+  @ApiResponse({ status: 200, description: 'Login successful' })
   @Post('auth/login')
-  login(@Body() data: LoginDto) {
-    return this.authClient.send({ cmd: 'login' }, data);
+  async login(@Body() data: LoginDto, @Req() req: any) {
+    const metadata = {
+      deviceId: req.headers['x-device-id'],
+      deviceName: req.headers['x-device-name'],
+      deviceType: req.headers['x-device-type'],
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+    return this.authClient.send({ cmd: 'login' }, { ...data, metadata });
   }
 
   @ApiTags('auth')
@@ -307,5 +310,43 @@ export class GatewayController {
   @Get('dashboard/payout-trend')
   getPayoutTrend(@Req() req) {
     return this.giftCardClient.send('get_payout_trend', { userId: req.user.id });
+  }
+
+  @ApiTags('auth')
+  @Post('auth/verify-device')
+  verifyDevice(@Body() data: { userId: string; deviceId: string; code: string }) {
+    return this.authClient.send({ cmd: 'verify-device' }, data);
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @Get('security/sessions')
+  getSessions(@Req() req: any) {
+    return this.authClient.send({ cmd: 'get-sessions' }, req.user.userId);
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @Post('security/sessions/revoke')
+  revokeSession(@Body() data: { sessionId: string }, @Req() req: any) {
+    return this.authClient.send({ cmd: 'revoke-session' }, { sessionId: data.sessionId, userId: req.user.userId });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @Get('security/devices')
+  getDevices(@Req() req: any) {
+    return this.authClient.send({ cmd: 'get-devices' }, req.user.userId);
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @Post('security/devices/remove')
+  removeDevice(@Body() data: { deviceId: string }, @Req() req: any) {
+    return this.authClient.send({ cmd: 'remove-device' }, { deviceId: data.deviceId, userId: req.user.userId });
   }
 }

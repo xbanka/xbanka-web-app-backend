@@ -27,7 +27,37 @@ export class AuthServiceController {
   }
 
   @MessagePattern({ cmd: 'resend-verification' })
-  async resendVerification(@Payload() data: { email: string; redirectUrl: string }) {
+  resendVerification(data: { email: string; redirectUrl: string }) {
     return this.authServiceService.resendVerification(data);
+  }
+
+  @MessagePattern({ cmd: 'verify-device' })
+  verifyDevice(@Payload() data: { userId: string; deviceId: string; code: string }) {
+    return this.authServiceService.verifyDevice(data);
+  }
+
+  @MessagePattern({ cmd: 'get-sessions' })
+  getSessions(@Payload() userId: string) {
+    return this.authServiceService.getSessions(userId);
+  }
+
+  @MessagePattern({ cmd: 'revoke-session' })
+  revokeSession(@Payload() data: { userId: string; sessionId: string }) {
+    return this.authServiceService.revokeSession(data);
+  }
+
+  @MessagePattern({ cmd: 'get-devices' })
+  getDevices(@Payload() userId: string) {
+    return this.authServiceService.getDevices(userId);
+  }
+
+  @MessagePattern({ cmd: 'remove-device' })
+  removeDevice(@Payload() data: { userId: string; deviceId: string }) {
+    return this.authServiceService.removeDevice(data);
+  }
+
+  @MessagePattern({ cmd: 'validate-session' })
+  validateSession(@Payload() data: { sessionId: string; userId: string }) {
+    return this.authServiceService.validateSession(data);
   }
 }
