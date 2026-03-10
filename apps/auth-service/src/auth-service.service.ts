@@ -150,9 +150,16 @@ export class AuthServiceService {
       });
     }
 
+    if (!deviceId) {
+      throw new RpcException({
+        message: 'Device ID is required for security verification',
+        status: 400,
+      });
+    }
+
     // --- Device & Session Logic ---
     let device = await this.prisma.device.findUnique({
-      where: { userId_deviceId: { userId: user.id, deviceId: deviceId || 'unknown' } },
+      where: { userId_deviceId: { userId: user.id, deviceId: deviceId } },
     });
 
     if (!device) {
