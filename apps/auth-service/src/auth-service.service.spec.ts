@@ -124,7 +124,7 @@ describe('AuthServiceService', () => {
 
             expect(result).toHaveProperty('access_token', 'test_token');
             expect(result.user).not.toHaveProperty('password');
-            expect(result.user.email).toBe(loginData.email);
+            expect(result?.user?.email).toBe(loginData.email);
         });
     });
 
