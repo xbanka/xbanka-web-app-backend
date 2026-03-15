@@ -60,18 +60,18 @@ export class KycServiceService {
         throw new RpcException({ message: response.detail || 'BVN verification failed', status: 400 });
       }
 
-      // const bvnData = response.data;
+      const bvnData = response.data;
 
       // Name comparison (case-insensitive)
-      // const firstNameMatch = (bvnData.firstName || bvnData.first_name || '').toLowerCase() === profile.firstName.toLowerCase();
-      // const lastNameMatch = (bvnData.lastName || bvnData.last_name || '').toLowerCase() === profile.lastName.toLowerCase();
+      const firstNameMatch = (bvnData.firstName || bvnData.first_name || '').toLowerCase() === profile.firstName.toLowerCase();
+      const lastNameMatch = (bvnData.lastName || bvnData.last_name || '').toLowerCase() === profile.lastName.toLowerCase();
 
-      // this.logger.log(`Name comparison for ${userId}: firstNameMatch=${firstNameMatch}, lastNameMatch=${lastNameMatch}`);
+      this.logger.log(`Name comparison for ${userId}: firstNameMatch=${firstNameMatch}, lastNameMatch=${lastNameMatch}`);
 
-      // if (!firstNameMatch || !lastNameMatch) {
-      //   this.logger.warn(`Name mismatch for ${userId}. BVN: ${bvnData.firstName} ${bvnData.lastName}, Profile: ${profile.firstName} ${profile.lastName}`);
-      //   throw new RpcException({ message: 'Names on BVN do not match your profile names', status: 400 });
-      // }
+      if (!firstNameMatch || !lastNameMatch) {
+        this.logger.warn(`Name mismatch for ${userId}. BVN: ${bvnData.firstName} ${bvnData.lastName}, Profile: ${profile.firstName} ${profile.lastName}`);
+        throw new RpcException({ message: 'Names on BVN do not match your profile names', status: 400 });
+      }
 
       // Encrypt the full response before storing
       const encryptedResponse = encrypt(JSON.stringify(response));
