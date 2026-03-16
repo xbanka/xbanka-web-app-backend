@@ -436,12 +436,20 @@ export class WalletServiceService {
 
   async resolveAccountName(accountNumber: string, bankCode?: string) {
     this.logger.log(`🔍 Received account resolution request for ${accountNumber}${bankCode ? ` at bank ${bankCode}` : ''}`);
-    return this.nubanApi.resolveAccountName(accountNumber, bankCode);
+    try {
+      return await this.nubanApi.resolveAccountName(accountNumber, bankCode);
+    } catch (error) {
+      throw new RpcException(error.message);
+    }
   }
 
   async getPossibleBanks(accountNumber: string) {
     this.logger.log(`🕵️ Getting possible banks for ${accountNumber}`);
-    return this.nubanApi.getPossibleBanks(accountNumber);
+    try {
+      return await this.nubanApi.getPossibleBanks(accountNumber);
+    } catch (error) {
+      throw new RpcException(error.message);
+    }
   }
 
   async getAllBanks() {

@@ -25,6 +25,11 @@ export class NubanApiService extends BaseIntegrationService {
         try {
             const response = await this.axios.get(url);
             this.logger.log(`✅ API Response for ${accountNumber}: ${JSON.stringify(response.data)}`);
+
+            if (response.data?.error === true) {
+                throw new Error(response.data.message || 'Unable to get bank details');
+            }
+
             return response.data;
         } catch (error) {
             this.logger.error(`❌ Account resolution failed: ${error.message}${error.response ? ` | Response: ${JSON.stringify(error.response.data)}` : ''}`);
@@ -45,6 +50,11 @@ export class NubanApiService extends BaseIntegrationService {
         try {
             const response = await this.axios.get(url);
             this.logger.log(`✅ API Response (Possible Banks) for ${accountNumber}: ${JSON.stringify(response.data)}`);
+
+            if (response.data?.error === true) {
+                throw new Error(response.data.message || 'Unable to guess banks');
+            }
+
             return response.data;
         } catch (error) {
             this.logger.error(`❌ Failed to guess banks: ${error.message}${error.response ? ` | Response: ${JSON.stringify(error.response.data)}` : ''}`);
