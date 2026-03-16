@@ -47,6 +47,22 @@ export class GatewayController {
     return this.walletClient.send({ cmd: 'handle-fiat-webhook' }, { payload, signature, provider });
   }
 
+  @ApiTags('nuban')
+  @ApiOperation({ summary: 'Get potential banks for a NUBAN', description: 'Given a 10-digit NUBAN, returns a list of banks where that account number could be valid according to the CBN algorithm.' })
+  @Get('accounts/:accountNumber/banks')
+  async getBanksForAccount(@Req() req) {
+    const accountNumber = req.params.accountNumber;
+    return this.walletClient.send({ cmd: 'get-banks-for-account' }, { accountNumber });
+  }
+
+  @ApiTags('nuban')
+  @ApiOperation({ summary: 'Generate NUBAN for a bank', description: 'Generates a full 10-digit NUBAN given a 9-digit account serial number and a 3-digit bank code.' })
+  @Post('accounts/:bankCode/generate')
+  async generateNuban(@Req() req, @Body() data: { serialNumber: string }) {
+    const bankCode = req.params.bankCode;
+    return this.walletClient.send({ cmd: 'generate-nuban' }, { bankCode, serialNumber: data.serialNumber });
+  }
+
   @ApiTags('wallet')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))

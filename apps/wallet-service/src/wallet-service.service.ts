@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { DatabaseService } from '@app/database';
-import { ObiexService } from '@app/common';
+import { ObiexService, NubanService } from '@app/common';
 import { WalletType } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -12,6 +12,7 @@ export class WalletServiceService {
   constructor(
     private readonly prisma: DatabaseService,
     private readonly obiex: ObiexService,
+    private readonly nuban: NubanService,
   ) { }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -82,6 +83,12 @@ export class WalletServiceService {
         this.logger.error(`❌ Error polling transaction ${tx.reference}: ${error.message}`);
       }
     }
+  }
+
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async refreshBankList() {
+    this.logger.log('⏰ Running scheduled bank list refresh...');
+    await this.nuban.refreshBanks();
   }
 
   async getWallets(userId: string) {
@@ -406,6 +413,23 @@ export class WalletServiceService {
         totalPages,
         currentPage: page,
       },
+    };
+  }
+
+  async getBanksForAccount(accountNumber: string) {
+    this.logger.log(`🔍 Finding banks for NUBAN: ${accountNumber}`);
+    return this.nuban.getBanksForAccount(accountNumber);
+  }
+
+  async generateNuban(bankCode: string, serialNumber: string) {
+    this.logger.log(`🏗️ Generating NUBAN for bank ${bankCode}, serial: ${serialNumber}`);
+    const generatedNuban = this.nuban.generateNuban(serialNumber, bankCode);
+    const bank = this.nuban.getBanks().find((b) => b.code === bankCode);
+    return {
+      serialNumber: serialNumber.padStart(9, '0'),
+      nuban: generatedNuban,
+      bankCode,
+      bank,
     };
   }
 }

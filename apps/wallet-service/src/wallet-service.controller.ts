@@ -55,4 +55,14 @@ export class WalletServiceController {
   async handleFiatWebhook(@Payload() data: { payload: any; signature: string; provider: string }) {
     return this.walletService.handleFiatWebhook(data.payload, data.signature, data.provider);
   }
+
+  @MessagePattern({ cmd: 'get-banks-for-account' })
+  async handleGetBanksForAccount(@Payload() data: { accountNumber: string }) {
+    return this.walletService.getBanksForAccount(data.accountNumber);
+  }
+
+  @MessagePattern({ cmd: 'generate-nuban' })
+  async handleGenerateNuban(@Payload() data: { bankCode: string; serialNumber: string }) {
+    return this.walletService.generateNuban(data.bankCode, data.serialNumber);
+  }
 }
