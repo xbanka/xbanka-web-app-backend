@@ -407,3 +407,43 @@ export class ResendVerificationDto {
     @IsString()
     redirectUrl: string;
 }
+
+// --- NUBAN & Account Lookup DTOs ---
+
+export class GenerateNubanDto {
+    @ApiProperty({
+        description: 'The 9-digit account serial number',
+        example: '000000001',
+        minLength: 9,
+        maxLength: 9,
+    })
+    @IsNumberString()
+    @IsNotEmpty()
+    @Length(9, 9, { message: 'Serial number must be exactly 9 digits' })
+    serialNumber: string;
+}
+
+export class AccountLookupDto {
+    @ApiProperty({
+        description: 'The 10-digit Nigerian account number',
+        example: '9082455489',
+        minLength: 10,
+        maxLength: 10,
+    })
+    @IsNumberString()
+    @IsNotEmpty()
+    @Length(10, 10, { message: 'Account number must be exactly 10 digits' })
+    accountNumber: string;
+
+    @ApiProperty({
+        description: 'The 3-digit bank code (optional but recommended for faster lookup)',
+        example: '950',
+        required: false,
+        minLength: 3,
+        maxLength: 3,
+    })
+    @IsOptional()
+    @IsNumberString()
+    @Length(3, 3, { message: 'Bank code must be exactly 3 digits' })
+    bankCode?: string;
+}

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { DatabaseService } from '@app/database';
-import { ObiexService, NubanService } from '@app/common';
+import { ObiexService, NubanService, NubanApiService } from '@app/common';
 import { WalletType } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -13,6 +13,7 @@ export class WalletServiceService {
     private readonly prisma: DatabaseService,
     private readonly obiex: ObiexService,
     private readonly nuban: NubanService,
+    private readonly nubanApi: NubanApiService,
   ) { }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -431,5 +432,20 @@ export class WalletServiceService {
       bankCode,
       bank,
     };
+  }
+
+  async resolveAccountName(accountNumber: string, bankCode?: string) {
+    this.logger.log(`🔍 Received account resolution request for ${accountNumber}${bankCode ? ` at bank ${bankCode}` : ''}`);
+    return this.nubanApi.resolveAccountName(accountNumber, bankCode);
+  }
+
+  async getPossibleBanks(accountNumber: string) {
+    this.logger.log(`🕵️ Getting possible banks for ${accountNumber}`);
+    return this.nubanApi.getPossibleBanks(accountNumber);
+  }
+
+  async getAllBanks() {
+    this.logger.log('🏦 Fetching all supported banks...');
+    return this.nuban.getBanks();
   }
 }

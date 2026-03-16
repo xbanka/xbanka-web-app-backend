@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile, Param } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Observable, map } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 
 @Controller()
@@ -48,19 +48,43 @@ export class GatewayController {
   }
 
   @ApiTags('nuban')
-  @ApiOperation({ summary: 'Get potential banks for a NUBAN', description: 'Given a 10-digit NUBAN, returns a list of banks where that account number could be valid according to the CBN algorithm.' })
+  @ApiOperation({ summary: 'List all supported Nigerian banks', description: 'Returns a list of all Nigerian banks and their CBN codes for selection.' })
+  @Get('accounts/banks')
+  async getAllBanks() {
+    return this.walletClient.send({ cmd: 'get-all-banks' }, {});
+  }
+
+  @ApiTags('nuban')
+  @ApiOperation({ summary: 'Find banks for an account number (Local)', description: 'Uses the CBN NUBAN algorithm and local bank list to identify which banks an account number could belong to.' })
+  @ApiParam({ name: 'accountNumber', description: '10-digit Nigerian account number', example: '0123456789' })
   @Get('accounts/:accountNumber/banks')
-  async getBanksForAccount(@Req() req) {
-    const accountNumber = req.params.accountNumber;
+  async getBanksForAccount(@Param('accountNumber') accountNumber: string) {
     return this.walletClient.send({ cmd: 'get-banks-for-account' }, { accountNumber });
   }
 
   @ApiTags('nuban')
   @ApiOperation({ summary: 'Generate NUBAN for a bank', description: 'Generates a full 10-digit NUBAN given a 9-digit account serial number and a 3-digit bank code.' })
+  @ApiParam({ name: 'bankCode', description: '3-digit CBN bank code', example: '058' })
+  @ApiBody({ type: GenerateNubanDto })
   @Post('accounts/:bankCode/generate')
-  async generateNuban(@Req() req, @Body() data: { serialNumber: string }) {
-    const bankCode = req.params.bankCode;
+  async generateNuban(@Param('bankCode') bankCode: string, @Body() data: GenerateNubanDto) {
     return this.walletClient.send({ cmd: 'generate-nuban' }, { bankCode, serialNumber: data.serialNumber });
+  }
+
+  @ApiTags('nuban')
+  @ApiOperation({ summary: 'Resolve account name', description: 'Looks up the account name for a given account number. If bankCode is provided, lookup is faster. If not, it attempts an account-only lookup.' })
+  @ApiBody({ type: AccountLookupDto })
+  @Post('accounts/lookup')
+  async resolveAccountName(@Body() data: AccountLookupDto) {
+    return this.walletClient.send({ cmd: 'resolve-account-name' }, { ...data });
+  }
+
+  @ApiTags('nuban')
+  @ApiOperation({ summary: 'Find possible banks for an account (External API)', description: 'Queries the external NUBAN API to find exactly which banks host this 10-digit account number.' })
+  @ApiParam({ name: 'accountNumber', description: '10-digit Nigerian account number', example: '9082455489' })
+  @Get('accounts/:accountNumber/possible-banks')
+  async getPossibleBanks(@Param('accountNumber') accountNumber: string) {
+    return this.walletClient.send({ cmd: 'get-possible-banks' }, { accountNumber });
   }
 
   @ApiTags('wallet')

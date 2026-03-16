@@ -65,4 +65,19 @@ export class WalletServiceController {
   async handleGenerateNuban(@Payload() data: { bankCode: string; serialNumber: string }) {
     return this.walletService.generateNuban(data.bankCode, data.serialNumber);
   }
+
+  @MessagePattern({ cmd: 'resolve-account-name' })
+  async handleResolveAccountName(@Payload() data: { accountNumber: string; bankCode?: string }) {
+    return this.walletService.resolveAccountName(data.accountNumber, data.bankCode);
+  }
+
+  @MessagePattern({ cmd: 'get-possible-banks' })
+  async handleGetPossibleBanks(@Payload() data: { accountNumber: string }) {
+    return this.walletService.getPossibleBanks(data.accountNumber);
+  }
+
+  @MessagePattern({ cmd: 'get-all-banks' })
+  async handleGetAllBanks() {
+    return this.walletService.getAllBanks();
+  }
 }
