@@ -30,6 +30,23 @@ export class GatewayController {
     return this.notificationClient.send(pattern, payload);
   }
 
+  @ApiTags('webhooks')
+  @ApiOperation({ summary: 'Obiex crypto webhook handler', description: 'Public endpoint for Obiex to send crypto deposit/transaction confirmation webhooks.' })
+  @Post('webhooks/crypto/obiex')
+  async handleObiexWebhook(@Req() req, @Body() payload: any) {
+    const signature = req.headers['x-obiex-signature'];
+    return this.walletClient.send({ cmd: 'handle-crypto-webhook' }, { payload, signature });
+  }
+
+  @ApiTags('webhooks')
+  @ApiOperation({ summary: 'Fiat webhook handler', description: 'Public endpoint to handle fiat transaction notifications from providers like Flutterwave or Paystack.' })
+  @Post('webhooks/fiat/:provider')
+  async handleFiatWebhook(@Req() req, @Body() payload: any) {
+    const provider = req.params.provider;
+    const signature = req.headers['x-webhook-signature'] || req.headers['verif-hash']; // Handle common signature headers
+    return this.walletClient.send({ cmd: 'handle-fiat-webhook' }, { payload, signature, provider });
+  }
+
   @ApiTags('wallet')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
@@ -37,7 +54,47 @@ export class GatewayController {
   @ApiResponse({ status: 200, description: 'List of wallets', type: [WalletResponseDto] })
   @Get('wallets')
   async getWallets(@Req() req) {
-    return this.walletClient.send('get_wallets', { userId: req.user.id });
+    return this.walletClient.send({ cmd: 'get-wallets' }, { userId: req.user.id });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get a single wallet by ID', description: 'Returns a specific wallet with all its provider addresses.' })
+  @ApiResponse({ status: 200, description: 'Wallet details' })
+  @Get('wallets/:walletId')
+  async getWallet(@Req() req, @Query('walletId') walletId: string) {
+    return this.walletClient.send({ cmd: 'get-wallet' }, { userId: req.user.id, walletId });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get crypto wallets with NGN equivalent', description: 'Returns all CRYPTO wallets with live NGN fiat equivalent for each balance.' })
+  @ApiResponse({ status: 200, description: 'Crypto wallets with fiat equivalent' })
+  @Get('wallets/crypto')
+  async getCryptoWallets(@Req() req) {
+    return this.walletClient.send({ cmd: 'get-crypto-wallets' }, { userId: req.user.id });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get fiat wallets', description: 'Returns all FIAT wallets and their linked accounts.' })
+  @ApiResponse({ status: 200, description: 'Fiat wallets' })
+  @Get('wallets/fiat')
+  async getFiatWallets(@Req() req) {
+    return this.walletClient.send({ cmd: 'get-fiat-wallets' }, { userId: req.user.id });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Generate or retrieve a crypto deposit address', description: 'Gets an existing deposit address or creates a new one via Obiex for the given currency and network.' })
+  @ApiResponse({ status: 200, description: 'Deposit address' })
+  @Post('wallets/deposit/crypto')
+  async generateWalletAddress(@Req() req, @Body() data: { currency: string; network: string }) {
+    return this.walletClient.send({ cmd: 'generate-wallet-address' }, { userId: req.user.id, ...data });
   }
 
   @ApiTags('wallet')
@@ -47,7 +104,7 @@ export class GatewayController {
   @ApiResponse({ status: 201, description: 'Bank account added successfully', type: BankDetailResponseDto })
   @Post('wallet/banks')
   async addBankDetail(@Req() req, @Body() data: BankDetailDto) {
-    return this.walletClient.send('add_bank_detail', { userId: req.user.id, ...data });
+    return this.walletClient.send({ cmd: 'add-bank-detail' }, { userId: req.user.id, ...data });
   }
 
   @ApiTags('wallet')
@@ -57,7 +114,7 @@ export class GatewayController {
   @ApiResponse({ status: 200, description: 'List of bank accounts', type: [BankDetailResponseDto] })
   @Get('wallet/banks')
   async getBankDetails(@Req() req) {
-    return this.walletClient.send('get_bank_details', { userId: req.user.id });
+    return this.walletClient.send({ cmd: 'get-bank-details' }, { userId: req.user.id });
   }
 
   @ApiTags('wallet')
@@ -68,7 +125,7 @@ export class GatewayController {
   @ApiQuery({ type: PaginationQueryDto })
   @Get('wallet/transactions')
   async getTransactions(@Req() req, @Query() pagination: PaginationQueryDto) {
-    return this.walletClient.send('get_transactions', {
+    return this.walletClient.send({ cmd: 'get-transactions' }, {
       userId: req.user.id,
       page: parseInt(pagination.page || '1'),
       limit: parseInt(pagination.limit || '10'),

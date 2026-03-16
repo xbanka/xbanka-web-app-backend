@@ -209,4 +209,56 @@ export class KycServiceService {
 
     return { message: 'Address updated successfully', nextStep: OnboardingStep.COMPLETED };
   }
+
+  async getOnboardingProgress(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { currentStep: true },
+    });
+
+    if (!user) {
+      throw new RpcException({ message: 'User not found', status: 404 });
+    }
+
+    const steps = [
+      { id: OnboardingStep.SIGNUP, label: 'Account Created' },
+      { id: OnboardingStep.EMAIL_VERIFIED, label: 'Email Verification' },
+      { id: OnboardingStep.BASIC_INFO, label: 'Basic Information' },
+      { id: OnboardingStep.BVN, label: 'BVN Verification' },
+      { id: OnboardingStep.IDENTITY, label: 'Identity Document' },
+      { id: OnboardingStep.SELFIE, label: 'Selfie Verification' },
+      { id: OnboardingStep.ADDRESS, label: 'Address Verification' },
+    ];
+
+    const currentStepIndex = steps.findIndex(s => s.id === user.currentStep);
+
+    // If currentStep is COMPLETED, all are completed. 
+    // If index is -1 (meaning COMPLETED), we treat it as all done.
+    const isAllCompleted = user.currentStep === OnboardingStep.COMPLETED;
+
+    const progress = steps.map((step, index) => {
+      let status: 'completed' | 'current' | 'pending';
+
+      if (isAllCompleted) {
+        status = 'completed';
+      } else if (index < currentStepIndex) {
+        status = 'completed';
+      } else if (index === currentStepIndex) {
+        status = 'current';
+      } else {
+        status = 'pending';
+      }
+
+      return {
+        ...step,
+        status,
+        isCompleted: status === 'completed',
+      };
+    });
+
+    return {
+      currentStep: user.currentStep,
+      progress,
+    };
+  }
 }

@@ -81,27 +81,75 @@ model User {
   sessions       Session[]
 }
 
+/// Enum representing the type of wallet.
+enum WalletType {
+  /// Fiat currency wallet (e.g., NGN).
+  FIAT
+  /// Cryptocurrency wallet (e.g., USDT, BTC).
+  CRYPTO
+}
+
 /// Represents a financial wallet for a specific currency.
 model Wallet {
   /// Unique identifier (UUID).
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   /// ID of the user who owns the wallet.
   userId    String
   /// Relation to the User model.
-  user      User     @relation(fields: [userId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
   /// Wallet currency (e.g., NGN, USDT, BTC).
   currency  String
   /// Current balance in the wallet.
-  balance   Float    @default(0)
+  balance   Float      @default(0)
+  /// Type of wallet (FIAT or CRYPTO).
+  type      WalletType @default(FIAT)
   /// Timestamp when the wallet was created.
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
   /// Timestamp of the last balance update.
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime   @updatedAt
+
+  /// Provider-specific addresses or accounts for this wallet.
+  addresses WalletAddress[]
 
   /// Ensure a user has only one wallet per currency.
   @@unique([userId, currency])
   /// Index for faster user-based wallet lookups.
   @@index([userId])
+}
+
+/// Stores provider-specific addresses or account details for a wallet.
+model WalletAddress {
+  /// Unique identifier (UUID).
+  id          String   @id @default(uuid())
+  /// ID of the parent wallet.
+  walletId    String
+  /// Relation to the Wallet model.
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+  /// The service provider (e.g., OBIEX).
+  provider    String
+  /// Optional reference ID from the provider.
+  providerRef String?
+  /// For crypto: the network (e.g., ERC20, TRC20, SOL).
+  network     String?
+  /// For crypto: the wallet address; For fiat: the account number.
+  address     String?
+  /// For fiat: the name on the account.
+  accountName String?
+  /// For fiat: the name of the bank.
+  bankName    String?
+  /// For fiat: the bank's unique code.
+  bankCode    String?
+  /// Optional memo or destination tag for crypto networks that require it.
+  memo        String?
+  /// Timestamp when the address was generated.
+  createdAt   DateTime @default(now())
+  /// Timestamp of the last update.
+  updatedAt   DateTime @updatedAt
+
+  /// Ensure a wallet has only one address per provider and network.
+  @@unique([walletId, provider, network])
+  /// Index for faster wallet-based address lookups.
+  @@index([walletId])
 }
 
 /// Stores banking details for user withdrawals.

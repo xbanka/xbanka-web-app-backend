@@ -25,4 +25,9 @@ export class KycServiceController {
   async updateAddress(@Payload() data: any) {
     return this.kycServiceService.updateAddress(data);
   }
+
+  @MessagePattern({ cmd: 'get-onboarding-progress' })
+  async getOnboardingProgress(@Payload() data: { userId: string }) {
+    return this.kycServiceService.getOnboardingProgress(data.userId);
+  }
 }

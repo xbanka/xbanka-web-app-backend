@@ -6,23 +6,53 @@ import { WalletServiceService } from './wallet-service.service';
 export class WalletServiceController {
   constructor(private readonly walletService: WalletServiceService) { }
 
-  @MessagePattern('get_wallets')
+  @MessagePattern({ cmd: 'get-wallets' })
   async handleGetWallets(@Payload() data: { userId: string }) {
     return this.walletService.getWallets(data.userId);
   }
 
-  @MessagePattern('add_bank_detail')
+  @MessagePattern({ cmd: 'get-wallet' })
+  async handleGetWallet(@Payload() data: { userId: string; walletId: string }) {
+    return this.walletService.getWallet(data.userId, data.walletId);
+  }
+
+  @MessagePattern({ cmd: 'get-crypto-wallets' })
+  async handleGetCryptoWallets(@Payload() data: { userId: string }) {
+    return this.walletService.getCryptoWallets(data.userId);
+  }
+
+  @MessagePattern({ cmd: 'get-fiat-wallets' })
+  async handleGetFiatWallets(@Payload() data: { userId: string }) {
+    return this.walletService.getFiatWallets(data.userId);
+  }
+
+  @MessagePattern({ cmd: 'generate-wallet-address' })
+  async handleGenerateWalletAddress(@Payload() data: { userId: string; currency: string; network: string }) {
+    return this.walletService.getOrCreateCryptoDepositAddress(data.userId, data.currency, data.network);
+  }
+
+  @MessagePattern({ cmd: 'add-bank-detail' })
   async handleAddBankDetail(@Payload() data: { userId: string; bankName: string; accountNumber: string; accountName: string }) {
     return this.walletService.addBankDetail(data.userId, data);
   }
 
-  @MessagePattern('get_bank_details')
+  @MessagePattern({ cmd: 'get-bank-details' })
   async handleGetBankDetails(@Payload() data: { userId: string }) {
     return this.walletService.getBankDetails(data.userId);
   }
 
-  @MessagePattern('get_transactions')
+  @MessagePattern({ cmd: 'get-transactions' })
   async handleGetTransactions(@Payload() data: { userId: string; page?: number; limit?: number }) {
     return this.walletService.getTransactions(data.userId, data.page, data.limit);
+  }
+
+  @MessagePattern({ cmd: 'handle-crypto-webhook' })
+  async handleCryptoWebhook(@Payload() data: { payload: any; signature: string }) {
+    return this.walletService.handleCryptoWebhook(data.payload, data.signature);
+  }
+
+  @MessagePattern({ cmd: 'handle-fiat-webhook' })
+  async handleFiatWebhook(@Payload() data: { payload: any; signature: string; provider: string }) {
+    return this.walletService.handleFiatWebhook(data.payload, data.signature, data.provider);
   }
 }
