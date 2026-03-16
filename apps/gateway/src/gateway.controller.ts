@@ -54,23 +54,6 @@ export class GatewayController {
     return this.walletClient.send({ cmd: 'get-all-banks' }, {});
   }
 
-  // @ApiTags('nuban')
-  // @ApiOperation({ summary: 'Find banks for an account number (Local)', description: 'Uses the CBN NUBAN algorithm and local bank list to identify which banks an account number could belong to.' })
-  // @ApiParam({ name: 'accountNumber', description: '10-digit Nigerian account number', example: '0123456789' })
-  // @Get('accounts/:accountNumber/banks')
-  // async getBanksForAccount(@Param('accountNumber') accountNumber: string) {
-  //   return this.walletClient.send({ cmd: 'get-banks-for-account' }, { accountNumber });
-  // }
-
-  // @ApiTags('nuban')
-  // @ApiOperation({ summary: 'Generate NUBAN for a bank', description: 'Generates a full 10-digit NUBAN given a 9-digit account serial number and a 3-digit bank code.' })
-  // @ApiParam({ name: 'bankCode', description: '3-digit CBN bank code', example: '058' })
-  // @ApiBody({ type: GenerateNubanDto })
-  // @Post('accounts/:bankCode/generate')
-  // async generateNuban(@Param('bankCode') bankCode: string, @Body() data: GenerateNubanDto) {
-  //   return this.walletClient.send({ cmd: 'generate-nuban' }, { bankCode, serialNumber: data.serialNumber });
-  // }
-
   @ApiTags('nuban')
   @ApiOperation({ summary: 'Resolve account name', description: 'Looks up the account name for a given account number. If bankCode is provided, lookup is faster. If not, it attempts an account-only lookup.' })
   @ApiBody({ type: AccountLookupDto })
@@ -83,17 +66,6 @@ export class GatewayController {
     }
   }
 
-  // @ApiTags('nuban')
-  // @ApiOperation({ summary: 'Find possible banks for an account (External API)', description: 'Queries the external NUBAN API to find exactly which banks host this 10-digit account number.' })
-  // @ApiParam({ name: 'accountNumber', description: '10-digit Nigerian account number', example: '9082455489' })
-  // @Get('accounts/:accountNumber/possible-banks')
-  // async getPossibleBanks(@Param('accountNumber') accountNumber: string) {
-  //   try {
-  //     return await firstValueFrom(this.walletClient.send({ cmd: 'get-possible-banks' }, { accountNumber }));
-  //   } catch (error) {
-  //     throw new BadRequestException(error.message || 'Failed to guess banks');
-  //   }
-  // }
 
   @ApiTags('wallet')
   @ApiBearerAuth()

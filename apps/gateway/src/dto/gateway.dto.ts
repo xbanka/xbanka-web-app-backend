@@ -426,7 +426,7 @@ export class GenerateNubanDto {
 export class AccountLookupDto {
     @ApiProperty({
         description: 'The 10-digit Nigerian account number',
-        example: '9082455489',
+        example: '1234567890',
         minLength: 10,
         maxLength: 10,
     })

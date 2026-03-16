@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ObiexService } from '../integrations/obiex.service';
+import { PaystackService } from '../integrations/paystack.service';
 
 @Injectable()
 export class NubanService implements OnModuleInit {
@@ -7,7 +8,10 @@ export class NubanService implements OnModuleInit {
     private readonly weights = [3, 7, 3, 3, 7, 3, 3, 7, 3, 3, 7, 3];
     private banks: { name: string; code: string }[] = [];
 
-    constructor(private readonly obiex: ObiexService) { }
+    constructor(
+        private readonly obiex: ObiexService,
+        private readonly paystack: PaystackService,
+    ) { }
 
     async onModuleInit() {
         await this.refreshBanks();
@@ -18,8 +22,8 @@ export class NubanService implements OnModuleInit {
      */
     async refreshBanks() {
         try {
-            this.logger.log('🔄 Refreshing Nigerian bank list from Obiex...');
-            const response: any = await this.obiex.getNgnBanks();
+            this.logger.log('🔄 Refreshing Nigerian bank list from Paystack...');
+            const response: any = await this.paystack.getBanks();
             const fetchedBanks = response?.data || response;
 
             if (Array.isArray(fetchedBanks)) {
@@ -27,9 +31,9 @@ export class NubanService implements OnModuleInit {
                     name: bank.name,
                     code: bank.code,
                 }));
-                this.logger.log(`✅ Successfully loaded ${this.banks.length} banks.`);
+                this.logger.log(`✅ Successfully loaded ${this.banks.length} banks from Paystack.`);
             } else {
-                this.logger.warn('⚠️ Obiex returned invalid bank data — using previous list');
+                this.logger.warn('⚠️ Paystack returned invalid bank data — using previous list');
             }
         } catch (error) {
             this.logger.error(`❌ Failed to refresh banks: ${error.message}`);
