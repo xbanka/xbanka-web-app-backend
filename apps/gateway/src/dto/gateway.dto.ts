@@ -50,6 +50,47 @@ export class LoginDto {
     password: string;
 }
 
+export class LoginResponseDto {
+    @ApiProperty({ description: 'The access token for authentication', required: false })
+    access_token?: string;
+
+    @ApiProperty({ description: 'The user object', required: false })
+    user?: any;
+
+    @ApiProperty({ description: 'The session object', required: false })
+    session?: any;
+
+    @ApiProperty({ description: 'The status of the login process', enum: ['DEVICE_VERIFICATION_REQUIRED', 'SUCCESS'], required: false })
+    status?: string;
+
+    @ApiProperty({ description: 'The user ID (required for device verification)', required: false })
+    userId?: string;
+
+    @ApiProperty({ description: 'The device ID (required for device verification)', required: false })
+    deviceId?: string;
+
+    @ApiProperty({ description: 'A helpful message', required: false })
+    message?: string;
+}
+
+export class VerifyDeviceDto {
+    @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
+    @IsUUID()
+    @IsNotEmpty()
+    userId: string;
+
+    @ApiProperty({ description: 'The unique ID of the device', example: 'device-uuid-here' })
+    @IsString()
+    @IsNotEmpty()
+    deviceId: string;
+
+    @ApiProperty({ description: 'The 6-digit OTP sent to the user\'s email', example: '123456' })
+    @IsString()
+    @IsNotEmpty()
+    @Length(6, 6)
+    code: string;
+}
+
 export class VerifyEmailDto {
     @ApiProperty({
         description: 'The hexadecimal verification token sent via email',

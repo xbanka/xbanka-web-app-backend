@@ -5,7 +5,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 
 @Controller()
@@ -177,7 +177,7 @@ export class GatewayController {
 
   @ApiTags('auth')
   @ApiOperation({ summary: 'Login with email and password' })
-  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({ status: 200, description: 'Login successful or device verification required', type: LoginResponseDto })
   @Post('auth/login')
   async login(@Body() data: LoginDto, @Req() req: any) {
     const metadata = {
@@ -390,8 +390,12 @@ export class GatewayController {
   }
 
   @ApiTags('auth')
+  @ApiOperation({ summary: 'Verify a new device', description: 'Verifies a new device using the 6-digit OTP sent to the user\'s email after a login attempt from an unrecognized device.' })
+  @ApiResponse({ status: 200, description: 'Device verified and trusted successfully', type: ApiResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid verification code or code has expired' })
+  @ApiResponse({ status: 404, description: 'Device or user not found' })
   @Post('auth/verify-device')
-  verifyDevice(@Body() data: { userId: string; deviceId: string; code: string }) {
+  verifyDevice(@Body() data: VerifyDeviceDto) {
     return this.authClient.send({ cmd: 'verify-device' }, data);
   }
 

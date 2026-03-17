@@ -197,6 +197,7 @@ export class AuthServiceService {
 
       return {
         status: 'DEVICE_VERIFICATION_REQUIRED',
+        userId: user.id,
         deviceId: device.deviceId,
         message: 'Verification code sent to email',
       };
