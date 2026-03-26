@@ -60,4 +60,49 @@ export class AuthServiceController {
   validateSession(@Payload() data: { sessionId: string; userId: string }) {
     return this.authServiceService.validateSession(data);
   }
+
+  @MessagePattern({ cmd: 'request-security-otp' })
+  async requestSecurityOtp(@Payload() data: { userId: string }) {
+    return this.authServiceService.requestSecurityOtp(data.userId);
+  }
+
+  @MessagePattern({ cmd: 'change-password' })
+  async changePassword(@Payload() data: any) {
+    return this.authServiceService.changePassword(data);
+  }
+
+  @MessagePattern({ cmd: 'create-pin' })
+  async createPin(@Payload() data: any) {
+    return this.authServiceService.createPin(data);
+  }
+
+  @MessagePattern({ cmd: 'update-pin' })
+  async updatePin(@Payload() data: any) {
+    return this.authServiceService.updatePin(data);
+  }
+
+  @MessagePattern({ cmd: 'validate-pin' })
+  async validatePin(@Payload() data: any) {
+    return this.authServiceService.validatePin(data);
+  }
+
+  @MessagePattern({ cmd: 'generate-2fa-secret' })
+  async generate2faSecret(@Payload() data: { userId: string }) {
+    return this.authServiceService.generate2faSecret(data.userId);
+  }
+
+  @MessagePattern({ cmd: 'enable-2fa' })
+  async enable2fa(@Payload() data: any) {
+    return this.authServiceService.enable2fa(data);
+  }
+
+  @MessagePattern({ cmd: 'disable-2fa' })
+  async disable2fa(@Payload() data: any) {
+    return this.authServiceService.disable2fa(data);
+  }
+
+  @MessagePattern({ cmd: 'verify-2fa-login' })
+  async verify2faLogin(@Payload() data: any) {
+    return this.authServiceService.verify2faLogin(data);
+  }
 }

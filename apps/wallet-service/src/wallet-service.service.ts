@@ -387,21 +387,85 @@ export class WalletServiceService {
     });
   }
 
-  async getTransactions(userId: string, page: number = 1, limit: number = 10) {
-    this.logger.log(`📜 Fetching transactions for user ${userId} (page: ${page}, limit: ${limit})`);
+  async getTransactions(userId: string, page: number = 1, limit: number = 10, category?: string) {
+    this.logger.log(`📜 Fetching transactions for user ${userId} (page: ${page}, limit: ${limit}, category: ${category})`);
     const skip = (page - 1) * limit;
 
-    const [items, totalItems] = await Promise.all([
-      this.prisma.transaction.findMany({
-        where: { userId },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.transaction.count({
-        where: { userId },
-      }),
-    ]);
+    let items: any[] = [];
+    let totalItems = 0;
+
+    if (category === 'GIFTCARD') {
+      [items, totalItems] = await Promise.all([
+        this.prisma.giftCardTrade.findMany({
+          where: { userId },
+          include: { card: true, category: true, region: true },
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.giftCardTrade.count({
+          where: { userId },
+        }),
+      ]);
+
+      // Map to unified format
+      items = items.map(trade => ({
+        id: trade.id,
+        type: 'TRADE',
+        status: trade.status,
+        amount: trade.payout, // Payout in NGN
+        currency: 'NGN',
+        reference: trade.id,
+        note: `Gift Card Sale: ${trade.card.name} (${trade.category.name})`,
+        createdAt: trade.createdAt,
+        updatedAt: trade.updatedAt,
+        category: 'GIFTCARD',
+        metadata: JSON.stringify({
+          usdAmount: trade.amount,
+          variantId: trade.variantId,
+          region: trade.region.name,
+        }),
+      }));
+    } else {
+      // For FIAT and CRYPTO, we filter regular transactions
+      const where: any = { userId };
+
+      if (category === 'FIAT' || category === 'CRYPTO') {
+        where.user = {
+          wallets: {
+            some: {
+              type: category,
+              // This is a bit complex in Prisma to join on currency directly in 'where'
+              // but since transactions are linked to wallets via userId and currency,
+              // we can use a more direct approach if we assume currency defines type.
+            }
+          }
+        };
+        // Refined approach: filter by currency groups
+        if (category === 'FIAT') {
+          where.currency = 'NGN';
+        } else {
+          where.currency = { not: 'NGN' };
+        }
+      }
+
+      [items, totalItems] = await Promise.all([
+        this.prisma.transaction.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.transaction.count({
+          where,
+        }),
+      ]);
+
+      items = items.map(tx => ({
+        ...tx,
+        category: tx.currency === 'NGN' ? 'FIAT' : 'CRYPTO',
+      }));
+    }
 
     const totalPages = Math.ceil(totalItems / limit);
 
@@ -455,5 +519,243 @@ export class WalletServiceService {
   async getAllBanks() {
     this.logger.log('🏦 Fetching all supported banks...');
     return this.nuban.getBanks();
+  }
+
+  private async calculateAdminFee(source: string, target: string, amount: number) {
+    const config = await this.prisma.rateConfiguration.findUnique({
+      where: { sourceCurrency_targetCurrency: { sourceCurrency: source, targetCurrency: target } },
+    });
+
+    if (!config || !config.isActive) {
+      return 0;
+    }
+
+    if (config.feeType === 'FIXED') {
+      return config.feeValue;
+    } else {
+      return (amount * config.feeValue) / 100;
+    }
+  }
+
+  async getConversionQuote(userId: string, source: string, target: string, amount: number) {
+    this.logger.log(`🔄 Getting conversion quote for user ${userId}: ${amount} ${source} -> ${target}`);
+
+    // 1. Get live quote from Obiex
+    const obiexQuote: any = await this.obiex.createQuote(source, target, amount);
+    const data = obiexQuote.data || obiexQuote;
+
+    // 2. Calculate admin fee
+    const grossPayout = data.amount || data.payout;
+    const fee = await this.calculateAdminFee(source, target, grossPayout || 0);
+    const netPayout = (grossPayout || 0) - fee;
+
+    // 3. Store quote internally for logging and to hide Obiex ID
+    const quote = await this.prisma.conversionQuote.create({
+      data: {
+        userId,
+        obiexQuoteId: data.id || data.quoteId,
+        sourceCurrency: source,
+        targetCurrency: target,
+        sourceAmount: amount,
+        rate: data.rate,
+        grossPayout: grossPayout || 0,
+        adminFee: fee,
+        netPayout,
+        expiresAt: new Date(data.expiresAt),
+      },
+    });
+
+    this.logger.log(`✅ Saved internal quote: ${quote.id} (Obiex ID: ${quote.obiexQuoteId})`);
+
+    return {
+      quoteId: quote.id, // Internal ID
+      sourceCurrency: source,
+      targetCurrency: target,
+      sourceAmount: amount,
+      rate: data.rate,
+      grossPayout: grossPayout,
+      adminFee: fee,
+      netPayout: netPayout,
+      expiresAt: data.expiresAt,
+    };
+  }
+
+  async executeConversion(userId: string, quoteId: string, source: string, target: string, amount: number) {
+    this.logger.log(`🚀 Executing conversion for user ${userId} using internal quote: ${quoteId}`);
+
+    // 1. Fetch internal quote and validate
+    const quote = await this.prisma.conversionQuote.findUnique({
+      where: { id: quoteId },
+    });
+
+    if (!quote || quote.userId !== userId) {
+      this.logger.error(`❌ Invalid or missing quote attempt: user=${userId}, quote=${quoteId}`);
+      throw new RpcException({ message: 'Invalid or missing conversion quote', status: 400 });
+    }
+
+    if (new Date() > quote.expiresAt) {
+      this.logger.warn(`⚠️ Quote expired: user=${userId}, quote=${quoteId}`);
+      throw new RpcException({ message: 'Conversion quote has expired', status: 400 });
+    }
+
+    // 2. Validate source wallet balance
+    const sourceWallet = await this.prisma.wallet.findUnique({
+      where: { userId_currency: { userId, currency: source } },
+    });
+
+    if (!sourceWallet || sourceWallet.balance < amount) {
+      throw new RpcException({ message: 'Insufficient balance in source wallet', status: 400 });
+    }
+
+    // 3. Execute swap via Obiex (using the original provider ID)
+    const obiexResponse: any = await this.obiex.swap(source, target, amount, quote.obiexQuoteId);
+    const data = obiexResponse.data || obiexResponse;
+
+    // 4. Calculate final payout and fee (re-calculate based on actual execution if provided by Obiex)
+    const grossPayout = data.amount || data.payout || quote.grossPayout;
+    const fee = await this.calculateAdminFee(source, target, grossPayout);
+    const netPayout = grossPayout - fee;
+
+    // 5. Atomic balance update and transaction record
+    return this.prisma.$transaction(async (tx) => {
+      // Create destination wallet if it doesn't exist
+      const targetWallet = await tx.wallet.upsert({
+        where: { userId_currency: { userId, currency: target } },
+        create: { userId, currency: target, balance: 0, type: target === 'NGN' ? 'FIAT' : 'CRYPTO' },
+        update: {},
+      });
+
+      // Update balances
+      await tx.wallet.update({
+        where: { id: sourceWallet.id },
+        data: { balance: { decrement: amount } },
+      });
+
+      await tx.wallet.update({
+        where: { id: targetWallet.id },
+        data: { balance: { increment: netPayout } },
+      });
+
+      // Create transaction record
+      return tx.transaction.create({
+        data: {
+          userId,
+          type: 'CONVERSION',
+          status: 'COMPLETED',
+          amount: netPayout,
+          currency: target,
+          reference: data.id || `CONV-${Date.now()}`,
+          note: `Converted ${amount} ${source} to ${target} (Fee: ${fee} ${target})`,
+          metadata: JSON.stringify({
+            sourceCurrency: source,
+            targetCurrency: target,
+            sourceAmount: amount,
+            grossPayout,
+            adminFee: fee,
+            internalQuoteId: quoteId,
+            obiexId: data.id,
+          }),
+        },
+      });
+    });
+  }
+  private validateCryptoAddress(address: string, network: string): boolean {
+    const patterns = {
+      'BITCOIN': /^(1|3|bc1)[a-zA-HJ-NP-Z0-9]{25,62}$/,
+      'ERC20': /^0x[a-fA-F0-9]{40}$/,
+      'TRC20': /^T[a-zA-Z0-9]{33}$/,
+      'BEP20': /^0x[a-fA-F0-9]{40}$/,
+    };
+
+    const pattern = patterns[network.toUpperCase()];
+    if (!pattern) return true; // Default to true if network not in list (let provider validate)
+    
+    return pattern.test(address);
+  }
+
+  async withdrawCrypto(userId: string, data: any) {
+    const { currency, network, address, amount, memo, narration } = data;
+    this.logger.log(`📤 Withdrawal request: user=${userId}, amount=${amount} ${currency}, network=${network}, address=${address}`);
+
+    // 1. Validate Address
+    if (!this.validateCryptoAddress(address, network)) {
+      this.logger.warn(`❌ Invalid address for ${network}: ${address}`);
+      throw new RpcException({ message: `Invalid ${network} address format`, status: 400 });
+    }
+
+    // 2. Lock Funds & Create Pending Transaction
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findUnique({
+        where: { userId_currency: { userId, currency } },
+      });
+
+      if (!wallet || wallet.balance < amount) {
+        throw new RpcException({ message: 'Insufficient balance', status: 400 });
+      }
+
+      // Deduct balance (Locking)
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { decrement: amount } },
+      });
+
+      // Create Pending Transaction record
+      return tx.transaction.create({
+        data: {
+          userId,
+          type: 'WITHDRAWAL',
+          status: 'PENDING',
+          amount,
+          currency,
+          reference: `WD-${Date.now()}`,
+          note: narration || `Withdrawal of ${amount} ${currency} to ${address}`,
+          metadata: JSON.stringify({ address, network, memo }),
+        },
+      });
+    });
+
+    try {
+      // 3. Call External Provider (Obiex)
+      const obiexResponse: any = await this.obiex.withdrawCrypto({
+        destination: { address, network, memo },
+        amount,
+        currency,
+        narration: narration || `Withdrawal from XBanka`,
+      });
+
+      const providerData = obiexResponse.data || obiexResponse;
+
+      // 4. Update Transaction on Success
+      await this.prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'COMPLETED',
+          reference: providerData.id || transaction.reference,
+        },
+      });
+
+      this.logger.log(`✅ Withdrawal COMPLETED: ${transaction.id}`);
+      return transaction;
+
+    } catch (error) {
+      this.logger.error(`❌ Withdrawal FAILED at provider: ${error.message}`);
+
+      // 5. Automatic Refund on Failure
+      await this.prisma.$transaction([
+        this.prisma.wallet.update({
+          where: { userId_currency: { userId, currency } },
+          data: { balance: { increment: amount } },
+        }),
+        this.prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'FAILED',
+            note: (transaction.note || '') + ` (Error: ${error.message})`,
+          },
+        }),
+      ]);
+
+      throw new RpcException({ message: `Withdrawal failed: ${error.message}`, status: 500 });
+    }
   }
 }

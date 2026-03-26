@@ -7,8 +7,29 @@ import { OnboardingStep } from '@prisma/client';
 export class UserServiceService {
   constructor(private readonly prisma: DatabaseService) { }
 
+  async getProfile(data: { userId: string }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      include: { profile: true },
+    });
+
+    if (!user) {
+      throw new RpcException({ message: 'User not found', status: 404 });
+    }
+
+    return {
+      userId: user.id,
+      email: user.email,
+      firstName: user.profile?.firstName || null,
+      lastName: user.profile?.lastName || null,
+      phoneNumber: user.profile?.phoneNumber || null,
+      avatarUrl: user.profile?.avatarUrl || null,
+      createdAt: user.createdAt,
+    };
+  }
+
   async updateProfile(data: any) {
-    const { userId, firstName, lastName, dateOfBirth, phoneNumber, gender, country } = data;
+    const { userId, firstName, lastName, dateOfBirth, phoneNumber, gender, country, avatarUrl } = data;
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -29,6 +50,7 @@ export class UserServiceService {
           phoneNumber,
           gender,
           country,
+          ...(avatarUrl && { avatarUrl }),
         },
         update: {
           firstName,
@@ -37,6 +59,7 @@ export class UserServiceService {
           phoneNumber,
           gender,
           country,
+          ...(avatarUrl && { avatarUrl }),
         },
       }),
       this.prisma.user.update({

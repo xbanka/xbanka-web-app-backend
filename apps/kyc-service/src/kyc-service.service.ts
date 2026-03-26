@@ -213,7 +213,7 @@ export class KycServiceService {
   async getOnboardingProgress(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { currentStep: true },
+      include: { profile: true, kyc: true },
     });
 
     if (!user) {
@@ -256,8 +256,37 @@ export class KycServiceService {
       };
     });
 
+    const isPhoneVerified = !!user.profile?.phoneNumber;
+    
+    let kycOverallStatus = 'PENDING';
+    const idStatus = user.kyc?.idStatus || 'PENDING';
+    const addressStatus = user.kyc?.addressStatus || 'PENDING';
+
+    if (idStatus === 'REJECTED' || addressStatus === 'REJECTED') {
+      kycOverallStatus = 'REJECTED';
+    } else if (idStatus === 'VERIFIED' && addressStatus === 'VERIFIED') {
+      kycOverallStatus = 'VERIFIED';
+    } else if (user.kyc?.bvnVerified) {
+      kycOverallStatus = 'PENDING';
+    }
+
+    let tierLevel = 0;
+    if (user.kyc?.bvnVerified) {
+      tierLevel = 1;
+      if (idStatus === 'VERIFIED') {
+        tierLevel = 2;
+        if (addressStatus === 'VERIFIED') {
+          tierLevel = 3;
+        }
+      }
+    }
+
     return {
       currentStep: user.currentStep,
+      emailVerified: user.isEmailVerified,
+      phoneVerified: isPhoneVerified,
+      kycStatus: kycOverallStatus,
+      tierLevel,
       progress,
     };
   }

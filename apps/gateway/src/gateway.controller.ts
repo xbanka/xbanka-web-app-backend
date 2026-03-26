@@ -5,7 +5,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 
 @Controller()
@@ -80,16 +80,6 @@ export class GatewayController {
   @ApiTags('wallet')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Get a single wallet by ID', description: 'Returns a specific wallet with all its provider addresses.' })
-  @ApiResponse({ status: 200, description: 'Wallet details' })
-  @Get('wallets/:walletId')
-  async getWallet(@Req() req, @Query('walletId') walletId: string) {
-    return this.walletClient.send({ cmd: 'get-wallet' }, { userId: req.user.id, walletId });
-  }
-
-  @ApiTags('wallet')
-  @ApiBearerAuth()
-  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Get crypto wallets with NGN equivalent', description: 'Returns all CRYPTO wallets with live NGN fiat equivalent for each balance.' })
   @ApiResponse({ status: 200, description: 'Crypto wallets with fiat equivalent' })
   @Get('wallets/crypto')
@@ -110,11 +100,51 @@ export class GatewayController {
   @ApiTags('wallet')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get a single wallet by ID', description: 'Returns a specific wallet with all its provider addresses.' })
+  @ApiResponse({ status: 200, description: 'Wallet details' })
+  @Get('wallets/:walletId')
+  async getWallet(@Req() req, @Param('walletId') walletId: string) {
+    return this.walletClient.send({ cmd: 'get-wallet' }, { userId: req.user.id, walletId });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Generate or retrieve a crypto deposit address', description: 'Gets an existing deposit address or creates a new one via Obiex for the given currency and network.' })
   @ApiResponse({ status: 200, description: 'Deposit address' })
   @Post('wallets/deposit/crypto')
   async generateWalletAddress(@Req() req, @Body() data: { currency: string; network: string }) {
     return this.walletClient.send({ cmd: 'generate-wallet-address' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get a conversion quote', description: 'Fetches a quote for converting between currencies, including administrative fees.' })
+  @ApiResponse({ status: 200, description: 'Conversion quote', type: ConvertQuoteResponseDto })
+  @Post('wallets/convert/quote')
+  async getConvertQuote(@Req() req, @Body() data: ConvertQuoteDto) {
+    return this.walletClient.send({ cmd: 'convert-quote' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Execute a currency conversion', description: 'Executes a conversion using a previously obtained quote ID. Deducts source and credits target wallet.' })
+  @ApiResponse({ status: 200, description: 'Conversion successful', type: TransactionResponseDto })
+  @Post('wallets/convert/execute')
+  async executeConversion(@Req() req, @Body() data: ConvertExecuteDto) {
+    return this.walletClient.send({ cmd: 'convert-execute' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Withdraw crypto to an external address', description: 'Checks address validity, locks funds, and executes withdrawal via Obiex.' })
+  @ApiResponse({ status: 200, description: 'Withdrawal successful', type: TransactionResponseDto })
+  @Post('wallets/withdraw/crypto')
+  async withdrawCrypto(@Req() req, @Body() data: WithdrawCryptoDto) {
+    return this.walletClient.send({ cmd: 'withdraw-crypto' }, { userId: req.user.id, ...data });
   }
 
   @ApiTags('wallet')
@@ -149,6 +179,7 @@ export class GatewayController {
       userId: req.user.id,
       page: parseInt(pagination.page || '1'),
       limit: parseInt(pagination.limit || '10'),
+      category: pagination.category,
     });
   }
 
@@ -237,14 +268,32 @@ export class GatewayController {
   }
 
   @ApiTags('profile')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get current user profile', description: 'Returns name, email, phone, user ID, account creation date and avatar URL.' })
+  @ApiResponse({ status: 200, description: 'Profile details returned successfully' })
+  @Get('users/profile')
+  getProfile(@Req() req) {
+    return this.userClient.send({ cmd: 'get-profile' }, { userId: req.user.id });
+  }
+
+  @ApiTags('profile')
   @ApiOperation({
     summary: 'Update basic user profile information',
-    description: 'Updates names, DOB, phone, gender, and country. Moves onboarding to the BVN stage.'
+    description: 'Updates names, DOB, phone, gender, country, and profile picture. Moves onboarding to the BVN stage.'
   })
   @ApiResponse({ status: 200, type: ApiResponseDto })
   @Post('users/profile')
-  updateProfile(@Body() data: UpdateProfileDto) {
-    return this.userClient.send({ cmd: 'update-profile' }, data);
+  @UseInterceptors(FileInterceptor('profilePicture'))
+  async updateProfile(
+    @Body() data: UpdateProfileDto,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    let avatarUrl: string | undefined;
+    if (file) {
+      avatarUrl = await this.s3Service.uploadFile(file, 'profile');
+    }
+    return this.userClient.send({ cmd: 'update-profile' }, { ...data, avatarUrl });
   }
 
   @ApiTags('profile')
@@ -315,6 +364,19 @@ export class GatewayController {
     return this.kycClient.send({ cmd: 'update-address' }, { ...data, proofOfAddress });
   }
 
+  @ApiTags('profile')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Get onboarding progress and verification status',
+    description: 'Returns the full verification checklist including tier level and dynamic statuses.'
+  })
+  @ApiResponse({ status: 200, description: 'Progress retrieved successfully' })
+  @Get('users/verification-status')
+  getOnboardingProgress(@Req() req) {
+    return this.kycClient.send({ cmd: 'get-onboarding-progress' }, { userId: req.user.id });
+  }
+
   @ApiTags('kyc')
   @ApiOperation({
     summary: 'Verify Bank Verification Number (BVN)',
@@ -376,6 +438,7 @@ export class GatewayController {
   @ApiResponse({ status: 200, type: TradingOverviewDto })
   @Get('dashboard/overview')
   getDashboardOverview(@Req() req) {
+    console.log(`[Gateway] Fetching dashboard overview for userId: ${req.user.id}`);
     return this.giftCardClient.send('get_trading_overview', { userId: req.user.id });
   }
 
@@ -386,6 +449,7 @@ export class GatewayController {
   @ApiResponse({ status: 200, type: [PayoutTrendDto] })
   @Get('dashboard/payout-trend')
   getPayoutTrend(@Req() req) {
+    console.log(`[Gateway] Fetching payout trend for userId: ${req.user.id}`);
     return this.giftCardClient.send('get_payout_trend', { userId: req.user.id });
   }
 
@@ -429,5 +493,129 @@ export class GatewayController {
   @Post('security/devices/remove')
   removeDevice(@Body() data: { deviceId: string }, @Req() req: any) {
     return this.authClient.send({ cmd: 'remove-device' }, { deviceId: data.deviceId, userId: req.user.userId });
+  }
+
+  // --- New Security & 2FA Endpoints ---
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Request Security OTP',
+    description: 'Generates and sends a 6-digit OTP to the user\'s email for sensitive security actions like changing passwords or transaction PINs.'
+  })
+  @ApiResponse({ status: 200, description: 'OTP sent successfully' })
+  @Post('security/request-otp')
+  requestSecurityOtp(@Req() req) {
+    return this.authClient.send({ cmd: 'request-security-otp' }, { userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Change Account Password',
+    description: 'Updates the login password. Requires the current password and a valid 6-digit OTP from /security/request-otp.'
+  })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @Post('security/password/change')
+  changePassword(@Req() req, @Body() data: ChangePasswordDto) {
+    return this.authClient.send({ cmd: 'change-password' }, { ...data, userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Create Transaction PIN',
+    description: 'Sets up a new 4-digit transaction PIN. Requires a valid 6-digit OTP.'
+  })
+  @ApiResponse({ status: 201, description: 'PIN created successfully' })
+  @Post('security/pin/create')
+  createPin(@Req() req, @Body() data: CreatePinDto) {
+    return this.authClient.send({ cmd: 'create-pin' }, { ...data, userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Update Transaction PIN',
+    description: 'Changes the existing 4-digit transaction PIN. Requires the old PIN and a valid 6-digit OTP.'
+  })
+  @ApiResponse({ status: 200, description: 'PIN updated successfully' })
+  @Post('security/pin/update')
+  updatePin(@Req() req, @Body() data: UpdatePinDto) {
+    return this.authClient.send({ cmd: 'update-pin' }, { ...data, userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Validate Transaction PIN',
+    description: 'Verifies the 4-digit PIN for sensitive transactions.'
+  })
+  @ApiResponse({ status: 200, description: 'PIN is valid' })
+  @ApiResponse({ status: 403, description: 'Invalid PIN' })
+  @Post('security/pin/validate')
+  validatePin(@Req() req, @Body() data: ValidatePinDto) {
+    return this.authClient.send({ cmd: 'validate-pin' }, { ...data, userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Generate 2FA Secret',
+    description: 'Generates a new TOTP secret and a QR-code-ready URL for authenticator app setup.'
+  })
+  @ApiResponse({ status: 200, description: 'Secret generated successfully' })
+  @Post('security/2fa/generate')
+  generate2faSecret(@Req() req) {
+    return this.authClient.send({ cmd: 'generate-2fa-secret' }, { userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Enable 2FA',
+    description: 'Enables Two-Factor Authentication using a token from the authenticator app.'
+  })
+  @ApiResponse({ status: 200, description: '2FA enabled successfully' })
+  @Post('security/2fa/enable')
+  enable2fa(@Req() req, @Body() data: Enable2faDto) {
+    return this.authClient.send({ cmd: 'enable-2fa' }, { ...data, userId: req.user.id });
+  }
+
+  @ApiTags('security')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Disable 2FA',
+    description: 'Disables Two-Factor Authentication. Requires a valid 6-digit TOTP token.'
+  })
+  @ApiResponse({ status: 200, description: '2FA disabled successfully' })
+  @Post('security/2fa/disable')
+  disable2fa(@Req() req, @Body() data: Enable2faDto) {
+    return this.authClient.send({ cmd: 'disable-2fa' }, { ...data, userId: req.user.id });
+  }
+
+  @ApiTags('auth')
+  @ApiOperation({
+    summary: 'Verify 2FA Login',
+    description: 'Completes the login process for users who have 2FA enabled. Requires the token from their authenticator app.'
+  })
+  @ApiResponse({ status: 200, description: 'Login successful' })
+  @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
+  @Post('auth/2fa/login')
+  verify2faLogin(@Body() data: Verify2faDto & { userId: string }, @Req() req) {
+    const metadata = {
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      deviceId: req.headers['x-device-id'],
+    };
+    return this.authClient.send({ cmd: 'verify-2fa-login' }, { ...data, metadata });
   }
 }

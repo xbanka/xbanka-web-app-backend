@@ -39,6 +39,43 @@ describe('UserServiceService', () => {
         expect(service).toBeDefined();
     });
 
+    describe('getProfile', () => {
+        it('should throw RpcException if user not found', async () => {
+            mockPrisma.user.findUnique.mockResolvedValue(null);
+            await expect(service.getProfile({ userId: '1' })).rejects.toThrow(RpcException);
+        });
+
+        it('should return user profile correctly', async () => {
+            const mockUser = {
+                id: '1',
+                email: 'test@test.com',
+                createdAt: new Date('2023-01-01'),
+                profile: {
+                    firstName: 'John',
+                    lastName: 'Doe',
+                    phoneNumber: '1234567890',
+                    avatarUrl: 'http://pic.com/1.png'
+                }
+            };
+            mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+
+            const result = await service.getProfile({ userId: '1' });
+            expect(result).toEqual({
+                userId: '1',
+                email: 'test@test.com',
+                firstName: 'John',
+                lastName: 'Doe',
+                phoneNumber: '1234567890',
+                avatarUrl: 'http://pic.com/1.png',
+                createdAt: mockUser.createdAt
+            });
+            expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+                where: { id: '1' },
+                include: { profile: true },
+            });
+        });
+    });
+
     describe('updateProfile', () => {
         const profileData = {
             userId: '1',
@@ -67,6 +104,18 @@ describe('UserServiceService', () => {
                 where: { id: profileData.userId },
                 data: { currentStep: OnboardingStep.BVN },
             });
+        });
+
+        it('should update profile with avatarUrl', async () => {
+            mockPrisma.user.findUnique.mockResolvedValue({ id: '1' });
+
+            const result = await service.updateProfile({ ...profileData, avatarUrl: 'url' });
+
+            expect(result.message).toBe('Profile updated successfully');
+            expect(mockPrisma.profile.upsert).toHaveBeenCalledWith(expect.objectContaining({
+                create: expect.objectContaining({ avatarUrl: 'url' }),
+                update: expect.objectContaining({ avatarUrl: 'url' }),
+            }));
         });
     });
 

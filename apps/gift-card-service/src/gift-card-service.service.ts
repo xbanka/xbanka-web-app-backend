@@ -50,11 +50,11 @@ export class GiftCardServiceService implements OnModuleInit {
             // 4. Variants
             await this.prisma.giftCardVariant.createMany({
                 data: [
-                    { cardId: apple.id, categoryId: physical.id, regionId: usa.id, rate: 750, dailyChange: 1.2 },
-                    { cardId: apple.id, categoryId: cashReceipt.id, regionId: usa.id, rate: 800, dailyChange: 1.5 },
-                    { cardId: apple.id, categoryId: ecode.id, regionId: usa.id, rate: 700, dailyChange: 0.5 },
-                    { cardId: amazon.id, categoryId: physical.id, regionId: usa.id, rate: 780, dailyChange: 2.1 },
-                    { cardId: steam.id, categoryId: ecode.id, regionId: uk.id, rate: 650, dailyChange: -0.2 },
+                    { cardId: apple.id, categoryId: physical!.id, regionId: usa!.id, rate: 750, dailyChange: 1.2 },
+                    { cardId: apple.id, categoryId: cashReceipt!.id, regionId: usa!.id, rate: 800, dailyChange: 1.5 },
+                    { cardId: apple.id, categoryId: ecode!.id, regionId: usa!.id, rate: 700, dailyChange: 0.5 },
+                    { cardId: amazon.id, categoryId: physical!.id, regionId: usa!.id, rate: 780, dailyChange: 2.1 },
+                    { cardId: steam.id, categoryId: ecode!.id, regionId: uk!.id, rate: 650, dailyChange: -0.2 },
                 ],
             });
         }
@@ -132,11 +132,13 @@ export class GiftCardServiceService implements OnModuleInit {
     }
 
     async getTradingOverview(userId: string) {
+        console.log(`[GiftCardService] getTradingOverview for userId: ${userId}`);
         const trades = await this.prisma.giftCardTrade.findMany({
             where: { userId },
             include: { card: true },
         });
 
+        console.log(`[GiftCardService] Found ${trades.length} trades for userId: ${userId}`);
         const cardsSold = trades.length;
         const totalPayout = trades.reduce((sum, trade) => sum + trade.payout, 0);
 
@@ -151,10 +153,13 @@ export class GiftCardServiceService implements OnModuleInit {
     }
 
     async getPayoutTrend(userId: string) {
+        console.log(`[GiftCardService] getPayoutTrend for userId: ${userId}`);
         const trades = await this.prisma.giftCardTrade.findMany({
             where: { userId },
             orderBy: { createdAt: 'asc' },
         });
+
+        console.log(`[GiftCardService] Found ${trades.length} trades for payout trend of userId: ${userId}`);
 
         const trend = trades.reduce((acc, trade) => {
             const date = trade.createdAt.toISOString().split('T')[0];

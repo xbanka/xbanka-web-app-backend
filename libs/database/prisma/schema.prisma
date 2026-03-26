@@ -62,6 +62,16 @@ model User {
   createdAt                  DateTime       @default(now())
   /// Timestamp of the last profile update.
   updatedAt                  DateTime       @updatedAt
+  /// Hashed 4-digit transaction PIN.
+  transactionPin             String?
+  /// Whether 2FA is enabled for this user.
+  isTwoFactorEnabled         Boolean        @default(false)
+  /// Secret for TOTP-based 2FA.
+  twoFactorSecret            String?
+  /// Temporary OTP for sensitive security actions.
+  securityOtp                String?
+  /// Expiration for the security OTP.
+  securityOtpExpiresAt       DateTime?
 
   /// One-to-one relation with the user's profile.
   profile        Profile?
@@ -79,6 +89,8 @@ model User {
   devices        Device[]
   /// One-to-many relation with the user's active/past sessions.
   sessions       Session[]
+  /// Internal records of conversion quotes.
+  conversionQuotes ConversionQuote[]
 }
 
 /// Enum representing the type of wallet.
@@ -187,6 +199,8 @@ enum TransactionType {
   TRANSFER_IN
   /// Sending funds to another user.
   TRANSFER_OUT
+  /// Converting between currencies.
+  CONVERSION
 }
 
 /// Possible statuses for a transaction.
@@ -499,6 +513,56 @@ model Session {
   expiresAt    DateTime
   lastActiveAt DateTime @default(now())
   createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Enum representing the type of fee calculation.
+enum FeeType {
+  /// A flat amount added to the transaction.
+  FIXED
+  /// A percentage of the transaction amount.
+  PERCENTAGE
+}
+
+/// Stores administrative fee configurations for currency conversions.
+model RateConfiguration {
+  id              String   @id @default(uuid())
+  /// The currency being converted from (e.g., USDT).
+  sourceCurrency  String
+  /// The currency being converted to (e.g., NGN).
+  targetCurrency  String
+  /// The type of fee (FIXED or PERCENTAGE).
+  feeType         FeeType  @default(PERCENTAGE)
+  /// The value of the fee (e.g., 1.5 for 1.5% or 500 for a fixed 500 NGN).
+  feeValue        Float    @default(0)
+  /// Whether this configuration is currently active.
+  isActive        Boolean  @default(true)
+  /// Timestamp of creation.
+  createdAt       DateTime @default(now())
+  /// Timestamp of last update.
+  updatedAt       DateTime @updatedAt
+
+  /// Ensure a unique configuration per currency pair.
+  @@unique([sourceCurrency, targetCurrency])
+}
+
+/// Stores internal records of conversion quotes to hide provider IDs and for logging.
+model ConversionQuote {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  /// The original quote ID from the provider (Obiex).
+  obiexQuoteId    String
+  sourceCurrency  String
+  targetCurrency  String
+  sourceAmount    Float
+  rate            Float
+  grossPayout     Float
+  adminFee        Float
+  netPayout       Float
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
 
   @@index([userId])
 }

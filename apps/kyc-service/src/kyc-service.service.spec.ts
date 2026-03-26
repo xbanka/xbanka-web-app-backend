@@ -168,6 +168,38 @@ describe('KycServiceService', () => {
             });
         });
 
+        it('should return correct dynamic statuses for Tier 2', async () => {
+            mockPrisma.user.findUnique.mockResolvedValue({
+                id: userId,
+                currentStep: OnboardingStep.IDENTITY,
+                isEmailVerified: true,
+                profile: { phoneNumber: '+123456789' },
+                kyc: { bvnVerified: true, idStatus: 'VERIFIED', addressStatus: 'PENDING' }
+            });
+
+            const result = await service.getOnboardingProgress(userId);
+
+            expect(result.emailVerified).toBe(true);
+            expect(result.phoneVerified).toBe(true);
+            expect(result.kycStatus).toBe('PENDING');
+            expect(result.tierLevel).toBe(2);
+        });
+
+        it('should return correct dynamic statuses for Tier 3', async () => {
+            mockPrisma.user.findUnique.mockResolvedValue({
+                id: userId,
+                currentStep: OnboardingStep.COMPLETED,
+                isEmailVerified: true,
+                profile: { phoneNumber: '+123456789' },
+                kyc: { bvnVerified: true, idStatus: 'VERIFIED', addressStatus: 'VERIFIED' }
+            });
+
+            const result = await service.getOnboardingProgress(userId);
+
+            expect(result.kycStatus).toBe('VERIFIED');
+            expect(result.tierLevel).toBe(3);
+        });
+
         it('should throw error if user not found', async () => {
             mockPrisma.user.findUnique.mockResolvedValue(null);
             await expect(service.getOnboardingProgress(userId)).rejects.toThrow(RpcException);

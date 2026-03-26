@@ -36,14 +36,24 @@ export class WalletServiceController {
     return this.walletService.addBankDetail(data.userId, data);
   }
 
+  @MessagePattern({ cmd: 'convert-quote' })
+  async handleConvertQuote(@Payload() data: { userId: string; sourceCurrency: string; targetCurrency: string; amount: number }) {
+    return this.walletService.getConversionQuote(data.userId, data.sourceCurrency, data.targetCurrency, data.amount);
+  }
+
+  @MessagePattern({ cmd: 'convert-execute' })
+  async handleConvertExecute(@Payload() data: { userId: string; quoteId: string; sourceCurrency: string; targetCurrency: string; amount: number }) {
+    return this.walletService.executeConversion(data.userId, data.quoteId, data.sourceCurrency, data.targetCurrency, data.amount);
+  }
+
   @MessagePattern({ cmd: 'get-bank-details' })
   async handleGetBankDetails(@Payload() data: { userId: string }) {
     return this.walletService.getBankDetails(data.userId);
   }
 
   @MessagePattern({ cmd: 'get-transactions' })
-  async handleGetTransactions(@Payload() data: { userId: string; page?: number; limit?: number }) {
-    return this.walletService.getTransactions(data.userId, data.page, data.limit);
+  async handleGetTransactions(@Payload() data: { userId: string; page?: number; limit?: number; category?: string }) {
+    return this.walletService.getTransactions(data.userId, data.page, data.limit, data.category);
   }
 
   @MessagePattern({ cmd: 'handle-crypto-webhook' })
@@ -79,5 +89,10 @@ export class WalletServiceController {
   @MessagePattern({ cmd: 'get-all-banks' })
   async handleGetAllBanks() {
     return this.walletService.getAllBanks();
+  }
+
+  @MessagePattern({ cmd: 'withdraw-crypto' })
+  async handleWithdrawCrypto(@Payload() data: { userId: string; currency: string; network: string; address: string; amount: number; memo?: string; narration?: string }) {
+    return this.walletService.withdrawCrypto(data.userId, data);
   }
 }

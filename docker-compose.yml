@@ -70,3 +70,15 @@ services:
     volumes:
       - /home/olakay/xbanka-data:/app/data
     restart: always
+
+  gift-card-service:
+    build: .
+    container_name: xbanka-gift-card
+    network_mode: "host"
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+    command: ["node", "dist/apps/gift-card-service/main.js"]
+    volumes:
+      - /home/olakay/xbanka-data:/app/data
+    restart: always

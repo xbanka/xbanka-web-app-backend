@@ -203,6 +203,14 @@ export class AuthServiceService {
       };
     }
 
+    if (user.isTwoFactorEnabled) {
+      return {
+        status: '2FA_REQUIRED',
+        userId: user.id,
+        message: 'Authenticator code required',
+      };
+    }
+
     // Create Session
     const session = await this.prisma.session.create({
       data: {
@@ -412,5 +420,234 @@ export class AuthServiceService {
       where: { id: data.sessionId, userId: data.userId, isRevoked: false },
     });
     return !!session;
+  }
+
+  // --- Security: OTP for Credentials ---
+
+  async requestSecurityOtp(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { securityOtp: otp, securityOtpExpiresAt: expiresAt },
+    });
+
+    this.notificationClient.emit('send_email', {
+      to: user.email,
+      subject: 'XBanka - Security Verification Code',
+      body: `<p>Your security verification code is: <h2>${otp}</h2></p><p>This code expires in 15 minutes.</p>`,
+    });
+
+    return { message: 'Security OTP sent to email' };
+  }
+
+  private async validateSecurityOtp(userId: string, otp: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.securityOtp !== otp) {
+      throw new RpcException({ message: 'Invalid security code', status: 400 });
+    }
+    if (user.securityOtpExpiresAt && user.securityOtpExpiresAt < new Date()) {
+      throw new RpcException({ message: 'Security code expired', status: 400 });
+    }
+
+    // Clear OTP after successful validation
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { securityOtp: null, securityOtpExpiresAt: null },
+    });
+  }
+
+  // --- Security: Password & PIN ---
+
+  async changePassword(data: any) {
+    const { userId, oldPassword, newPassword, otp } = data;
+    await this.validateSecurityOtp(userId, otp);
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.password) throw new RpcException({ message: 'User password not found', status: 400 });
+
+    const isMatched = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatched) throw new RpcException({ message: 'Incorrect current password', status: 400 });
+
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Password changed successfully' };
+  }
+
+  async createPin(data: any) {
+    const { userId, pin, otp } = data;
+    await this.validateSecurityOtp(userId, otp);
+
+    const salt = await bcrypt.genSalt();
+    const hashedPin = await bcrypt.hash(pin, salt);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { transactionPin: hashedPin },
+    });
+
+    return { message: 'Transaction PIN created successfully' };
+  }
+
+  async updatePin(data: any) {
+    const { userId, oldPin, newPin, otp } = data;
+    await this.validateSecurityOtp(userId, otp);
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.transactionPin) throw new RpcException({ message: 'No existing PIN found', status: 400 });
+
+    const isMatched = await bcrypt.compare(oldPin, user.transactionPin);
+    if (!isMatched) throw new RpcException({ message: 'Incorrect current values', status: 400 });
+
+    const salt = await bcrypt.genSalt();
+    const hashedPin = await bcrypt.hash(newPin, salt);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { transactionPin: hashedPin },
+    });
+
+    return { message: 'Transaction PIN updated successfully' };
+  }
+
+  async validatePin(data: { userId: string; pin: string }) {
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    if (!user || !user.transactionPin) throw new RpcException({ message: 'Transaction PIN not set', status: 400 });
+
+    const isValid = await bcrypt.compare(data.pin, user.transactionPin);
+    if (!isValid) throw new RpcException({ message: 'Invalid transaction PIN', status: 403 });
+
+    return { valid: true };
+  }
+
+  // --- Security: Manual TOTP (RFC 6238) ---
+
+  async generate2faSecret(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    // Manual Base32 generation for secret
+    const secret = crypto.randomBytes(20).toString('hex').slice(0, 32); 
+    const otpAuthUrl = `otpauth://totp/XBanka:${user.email}?secret=${secret}&issuer=XBanka`;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: secret },
+    });
+
+    return { secret, otpAuthUrl };
+  }
+
+  async enable2fa(data: { userId: string; token: string }) {
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    if (!user || !user.twoFactorSecret) throw new RpcException({ message: 'Secret not generated', status: 400 });
+
+    const isValid = await this.verifyTotp(user.twoFactorSecret, data.token);
+    if (!isValid) throw new RpcException({ message: 'Invalid verification token', status: 400 });
+
+    await this.prisma.user.update({
+      where: { id: data.userId },
+      data: { isTwoFactorEnabled: true },
+    });
+
+    return { message: '2FA enabled successfully' };
+  }
+
+  async disable2fa(data: { userId: string; token: string }) {
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    if (!user || !user.isTwoFactorEnabled || !user.twoFactorSecret) {
+      throw new RpcException({ message: '2FA is not enabled', status: 400 });
+    }
+
+    const isValid = await this.verifyTotp(user.twoFactorSecret, data.token);
+    if (!isValid) throw new RpcException({ message: 'Invalid verification token', status: 400 });
+
+    await this.prisma.user.update({
+      where: { id: data.userId },
+      data: { isTwoFactorEnabled: false, twoFactorSecret: null },
+    });
+
+    return { message: '2FA disabled successfully' };
+  }
+
+  async verify2faLogin(data: { userId: string; token: string; metadata: any }) {
+    const user = await this.prisma.user.findUnique({ where: { id: data.userId } });
+    if (!user || !user.isTwoFactorEnabled || !user.twoFactorSecret) {
+      throw new RpcException({ message: '2FA not enabled', status: 400 });
+    }
+
+    const isValid = await this.verifyTotp(user.twoFactorSecret, data.token);
+    if (!isValid) throw new RpcException({ message: 'Invalid 2FA token', status: 401 });
+
+    // --- Session Creation (Duplicated logic from login for simplicity/consistency) ---
+    const { deviceId, deviceName, deviceType, ipAddress, userAgent } = data.metadata || {};
+    let device = await this.prisma.device.findUnique({
+      where: { userId_deviceId: { userId: user.id, deviceId: deviceId || 'unknown' } },
+    });
+
+    if (!device || !device.isTrusted) {
+        throw new RpcException({ message: 'Untrusted device', status: 403 });
+    }
+
+    const session = await this.prisma.session.create({
+      data: {
+        userId: user.id,
+        deviceId: device.id,
+        ipAddress,
+        userAgent,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const payload = { sub: user.id, email: user.email, sid: session.id };
+    const { password: _, ...userWithoutPassword } = user;
+
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      user: userWithoutPassword,
+      session: {
+        id: session.id,
+        deviceName: device.name,
+        lastActiveAt: session.lastActiveAt,
+      },
+    };
+  }
+
+  private async verifyTotp(secret: string, token: string): Promise<boolean> {
+    // Basic TOTP implementation (Simplified for manual use without library)
+    // Note: In production, a library like otplib is strictly recommended.
+    // This uses a fixed 30s window check.
+    const timeStep = 30;
+    const counter = Math.floor(Date.now() / 1000 / timeStep);
+    
+    const checkToken = (c: number) => {
+        const message = Buffer.alloc(8);
+        message.writeBigInt64BE(BigInt(c), 0);
+        const hmac = crypto.createHmac('sha1', secret);
+        hmac.update(message);
+        const hash = hmac.digest();
+        const offset = hash[hash.length - 1] & 0xf;
+        const binary = ((hash[offset] & 0x7f) << 24) |
+                      ((hash[offset + 1] & 0xff) << 16) |
+                      ((hash[offset + 2] & 0xff) << 8) |
+                      (hash[offset + 3] & 0xff);
+        return (binary % 1000000).toString().padStart(6, '0');
+    };
+
+    // Check current, previous, and next windows
+    return checkToken(counter) === token || 
+           checkToken(counter - 1) === token || 
+           checkToken(counter + 1) === token;
   }
 }

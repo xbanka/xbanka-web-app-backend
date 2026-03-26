@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, MinLength, IsOptional, IsUUID, IsNumberString, Length } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, MinLength, IsOptional, IsUUID, IsNumberString, Length, IsNumber, Min } from 'class-validator';
 
 export class SignupDto {
     @ApiProperty({
@@ -132,6 +132,10 @@ export class UpdateProfileDto {
     @ApiProperty({ description: 'Country of residence', example: 'Nigeria' })
     @IsString()
     country: string;
+
+    @ApiProperty({ type: 'string', format: 'binary', required: false })
+    @IsOptional()
+    profilePicture?: any;
 }
 
 export class UpdateIdentityDto {
@@ -249,6 +253,11 @@ export class PaginationQueryDto {
     @IsOptional()
     @IsString()
     limit?: string;
+
+    @ApiProperty({ description: 'Filter by category (FIAT, CRYPTO, GIFTCARD)', example: 'FIAT', required: false })
+    @IsOptional()
+    @IsString()
+    category?: string;
 }
 
 export class PaginationMetaDto {
@@ -322,7 +331,7 @@ export class TransactionResponseDto {
     @ApiProperty({ example: 'uuid-789' })
     id: string;
 
-    @ApiProperty({ example: 'DEPOSIT', enum: ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT'] })
+    @ApiProperty({ example: 'DEPOSIT', enum: ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'TRADE', 'CONVERSION'] })
     type: string;
 
     @ApiProperty({ example: 'COMPLETED', enum: ['PENDING', 'COMPLETED', 'FAILED'] })
@@ -342,6 +351,9 @@ export class TransactionResponseDto {
 
     @ApiProperty({ example: '2026-03-07T10:30:00Z' })
     createdAt: Date;
+
+    @ApiProperty({ example: 'FIAT', enum: ['FIAT', 'CRYPTO', 'GIFTCARD'] })
+    category: string;
 }
 
 // --- Gift Card DTOs ---
@@ -486,5 +498,177 @@ export class AccountLookupDto {
     @IsOptional()
     @IsNumberString()
     @Length(3, 3, { message: 'Bank code must be exactly 3 digits' })
+    @Length(3, 3, { message: 'Bank code must be exactly 3 digits' })
     bankCode?: string;
 }
+
+export class RequestSecurityOtpDto {
+    @ApiProperty({ description: 'The email of the user requesting the OTP', example: 'user@example.com' })
+    @IsEmail()
+    email: string;
+}
+
+export class ChangePasswordDto {
+    @ApiProperty({ description: 'The current password of the user' })
+    @IsString()
+    @MinLength(6)
+    oldPassword: string;
+
+    @ApiProperty({ description: 'The new password to set' })
+    @IsString()
+    @MinLength(6)
+    newPassword: string;
+
+    @ApiProperty({ description: 'The 6-digit OTP sent to the user email', example: '123456' })
+    @IsString()
+    @Length(6, 6)
+    otp: string;
+}
+
+export class CreatePinDto {
+    @ApiProperty({ description: 'The 4-digit transaction PIN to set', example: '1234' })
+    @IsString()
+    @IsNumberString()
+    @Length(4, 4)
+    pin: string;
+
+    @ApiProperty({ description: 'The 6-digit OTP sent to the user email', example: '123456' })
+    @IsString()
+    @Length(6, 6)
+    otp: string;
+}
+
+export class UpdatePinDto {
+    @ApiProperty({ description: 'The current 4-digit transaction PIN', example: '1234' })
+    @IsString()
+    @IsNumberString()
+    @Length(4, 4)
+    oldPin: string;
+
+    @ApiProperty({ description: 'The new 4-digit transaction PIN to set', example: '5678' })
+    @IsString()
+    @IsNumberString()
+    @Length(4, 4)
+    newPin: string;
+
+    @ApiProperty({ description: 'The 6-digit OTP sent to the user email', example: '123456' })
+    @IsString()
+    @Length(6, 6)
+    otp: string;
+}
+
+export class ValidatePinDto {
+    @ApiProperty({ description: 'The 4-digit transaction PIN to validate', example: '1234' })
+    @IsString()
+    @IsNumberString()
+    @Length(4, 4)
+    pin: string;
+}
+
+export class Enable2faDto {
+    @ApiProperty({ description: 'The 6-digit TOTP token from the authenticator app', example: '123456' })
+    @IsString()
+    @Length(6, 6)
+    token: string;
+}
+
+export class Verify2faDto {
+    @ApiProperty({ description: 'The 6-digit TOTP token', example: '123456' })
+    @IsString()
+    @Length(6, 6)
+    token: string;
+}
+
+export class ConvertQuoteDto {
+    @ApiProperty({ description: 'The currency to convert from', example: 'USDT' })
+    @IsString()
+    @IsNotEmpty()
+    sourceCurrency: string;
+
+    @ApiProperty({ description: 'The currency to convert to', example: 'NGN' })
+    @IsString()
+    @IsNotEmpty()
+    targetCurrency: string;
+
+    @ApiProperty({ description: 'The amount to convert (in source currency)', example: 100 })
+    @IsNotEmpty()
+    amount: number;
+}
+
+export class ConvertExecuteDto {
+    @ApiProperty({ description: 'The quote ID received from the quote endpoint', example: 'quote-uuid-from-obiex' })
+    @IsString()
+    @IsNotEmpty()
+    quoteId: string;
+
+    @ApiProperty({ description: 'The currency to convert from', example: 'USDT' })
+    @IsString()
+    @IsNotEmpty()
+    sourceCurrency: string;
+
+    @ApiProperty({ description: 'The currency to convert to', example: 'NGN' })
+    @IsString()
+    @IsNotEmpty()
+    targetCurrency: string;
+
+    @ApiProperty({ description: 'The amount to convert (must match the quote)', example: 100 })
+    @IsNotEmpty()
+    amount: number;
+}
+
+export class ConvertQuoteResponseDto {
+    @ApiProperty({ example: 'quote-uuid-123' })
+    quoteId: string;
+
+    @ApiProperty({ example: 'USDT' })
+    sourceCurrency: string;
+
+    @ApiProperty({ example: 'NGN' })
+    targetCurrency: string;
+
+    @ApiProperty({ example: 100 })
+    sourceAmount: number;
+
+    @ApiProperty({ example: 1550.50 })
+    rate: number;
+
+    @ApiProperty({ example: 155050.00 })
+    grossPayout: number;
+
+    @ApiProperty({ example: 2325.75 })
+    adminFee: number;
+
+    @ApiProperty({ example: 152724.25 })
+    netPayout: number;
+
+    @ApiProperty({ example: '2026-03-26T10:00:00Z' })
+    expiresAt: string;
+}
+
+export class WithdrawCryptoDto {
+    @ApiProperty({ description: 'The currency to withdraw (e.g., USDT, BTC)', example: 'USDT' })
+    @IsNotEmpty()
+    currency: string;
+
+    @ApiProperty({ description: 'The network to use (e.g., ERC20, TRC20, BITCOIN)', example: 'TRC20' })
+    @IsNotEmpty()
+    network: string;
+
+    @ApiProperty({ description: 'The recipient wallet address', example: 'TR7NHqjiSZTp6uu3rpkDxJFCH8L7Lx2puz' })
+    @IsNotEmpty()
+    address: string;
+
+    @ApiProperty({ description: 'The amount to withdraw', example: 100 })
+    @IsNumber()
+    @Min(0.00000001)
+    amount: number;
+
+    @ApiProperty({ description: 'Optional memo for some networks (e.g., XRP, EOS)', required: false })
+    @IsOptional()
+    memo?: string;
+
+    @ApiProperty({ description: 'Optional narration for the transaction', required: false })
+    @IsOptional()
+    narration?: string;
+}
+

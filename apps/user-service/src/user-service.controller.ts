@@ -7,6 +7,11 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 export class UserServiceController {
   constructor(private readonly userServiceService: UserServiceService) { }
 
+  @MessagePattern({ cmd: 'get-profile' })
+  async getProfile(@Payload() data: { userId: string }) {
+    return this.userServiceService.getProfile(data);
+  }
+
   @MessagePattern({ cmd: 'update-profile' })
   async updateProfile(@Payload() data: any) {
     return this.userServiceService.updateProfile(data);
