@@ -530,6 +530,7 @@ export class GatewayController {
     summary: 'Create Transaction PIN',
     description: 'Sets up a new 4-digit transaction PIN. Requires a valid 6-digit OTP.'
   })
+  @ApiBody({ type: CreatePinDto })
   @ApiResponse({ status: 201, description: 'PIN created successfully' })
   @Post('security/pin/create')
   createPin(@Req() req, @Body() data: CreatePinDto) {
