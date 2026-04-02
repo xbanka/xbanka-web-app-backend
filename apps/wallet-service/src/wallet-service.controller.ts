@@ -41,6 +41,11 @@ export class WalletServiceController {
     return this.walletService.getConversionQuote(data.userId, data.sourceCurrency, data.targetCurrency, data.amount);
   }
 
+  @MessagePattern({ cmd: 'check-rate' })
+  async handleCheckRate(@Payload() data: { source: string; target: string; amount: number }) {
+    return this.walletService.calculateRate(data);
+  }
+
   @MessagePattern({ cmd: 'convert-execute' })
   async handleConvertExecute(@Payload() data: { userId: string; quoteId: string; sourceCurrency: string; targetCurrency: string; amount: number }) {
     return this.walletService.executeConversion(data.userId, data.quoteId, data.sourceCurrency, data.targetCurrency, data.amount);

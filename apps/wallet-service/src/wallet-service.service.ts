@@ -580,6 +580,30 @@ export class WalletServiceService {
     };
   }
 
+  async calculateRate(data: { source: string; target: string; amount: number }) {
+    this.logger.log(`🔍 Calculating rate: ${data.amount} ${data.source} -> ${data.target}`);
+
+    // 1. Get live quote from Obiex
+    const obiexQuote: any = await this.obiex.getExchangeRate(data.source, data.target, data.amount);
+    const quoteData = obiexQuote.data || obiexQuote;
+
+    // 2. Calculate admin fee
+    const grossPayout = quoteData.amount || quoteData.payout;
+    const fee = await this.calculateAdminFee(data.source, data.target, grossPayout || 0);
+    const netPayout = (grossPayout || 0) - fee;
+
+    return {
+      sourceCurrency: data.source,
+      targetCurrency: data.target,
+      sourceAmount: data.amount,
+      rate: quoteData.rate,
+      grossPayout: grossPayout || 0,
+      adminFee: fee,
+      netPayout,
+      estimatedPrice: `1 ${data.source} ≈ ${quoteData.rate.toLocaleString()} ${data.target}`,
+    };
+  }
+
   async executeConversion(userId: string, quoteId: string, source: string, target: string, amount: number) {
     this.logger.log(`🚀 Executing conversion for user ${userId} using internal quote: ${quoteId}`);
 

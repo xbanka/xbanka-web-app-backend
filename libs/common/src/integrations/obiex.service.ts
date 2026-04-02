@@ -7,10 +7,11 @@ import { AxiosRequestConfig } from 'axios';
 export class ObiexService extends BaseIntegrationService {
     protected readonly baseUrl = process.env.OBIEX_BASE_URL || 'https://api.obiex.finance/v1';
     protected readonly apiKey = process.env.OBIEX_API_KEY || '';
-    private readonly apiSecret = process.env.OBIEX_API_SECRET || '';
+    private readonly apiSecret = process.env.OBIEX_API_SECRET || process.env.OBIEX_SECRET || '';
 
     private generateSignature(method: string, fullPath: string, timestamp: number): string {
         const content = `${method.toUpperCase()}${fullPath}${timestamp}`;
+        this.logger.debug(`✍️ Signing string: "${content}"`);
         return crypto
             .createHmac('sha256', this.apiSecret)
             .update(content)
@@ -33,11 +34,12 @@ export class ObiexService extends BaseIntegrationService {
             }
         }
         const signature = this.generateSignature(method, fullPath, timestamp);
+        this.logger.debug(`🔑 Headers generated for ${method} ${fullPath}: API-KEY=${this.apiKey}, TIMESTAMP=${timestamp}`);
         return {
             'X-API-KEY': this.apiKey,
             'X-API-TIMESTAMP': timestamp.toString(),
             'X-API-SIGNATURE': signature,
-            'Authorization': '', // Clear the default Bearer token from BaseIntegrationService
+            'Authorization': null, // Signal BaseIntegrationService to remove this header entirely
         };
     }
 
@@ -53,6 +55,10 @@ export class ObiexService extends BaseIntegrationService {
         return this.post(path, { sourceId, targetId, amount }, {
             headers: this.getObiexHeaders('POST', path),
         });
+    }
+
+    async getExchangeRate(sourceId: string, targetId: string, amount: number) {
+        return this.createQuote(sourceId, targetId, amount);
     }
 
     async acceptQuote(quoteId: string) {

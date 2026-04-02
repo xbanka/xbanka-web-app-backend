@@ -21,7 +21,15 @@ export abstract class BaseIntegrationService {
         this.axios.interceptors.response.use(
             (response) => response,
             (error) => {
-                this.logger.error(`Error in integration: ${error.message}`, error.stack);
+                const responseData = error.response?.data;
+                const logMessage = responseData 
+                    ? `Error in integration: ${error.message} | Response: ${JSON.stringify(responseData)}`
+                    : `Error in integration: ${error.message}`;
+                
+                this.logger.error(logMessage);
+                if (!responseData) {
+                    this.logger.debug(error.stack);
+                }
                 throw error;
             },
         );
@@ -29,9 +37,12 @@ export abstract class BaseIntegrationService {
 
     protected async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
         const headers = {
-            Authorization: `Bearer ${this.apiKey}`,
+            ...(config?.headers?.Authorization === null ? {} : { Authorization: `Bearer ${this.apiKey}` }),
             ...config?.headers,
         };
+        // Clean up internal suppression flag
+        if (headers.Authorization === null) delete headers.Authorization;
+
         const response: AxiosResponse<T> = await this.axios.get(`${this.baseUrl}${url}`, {
             ...config,
             headers,
@@ -41,9 +52,12 @@ export abstract class BaseIntegrationService {
 
     protected async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
         const headers = {
-            Authorization: `Bearer ${this.apiKey}`,
+            ...(config?.headers?.Authorization === null ? {} : { Authorization: `Bearer ${this.apiKey}` }),
             ...config?.headers,
         };
+        // Clean up internal suppression flag
+        if (headers.Authorization === null) delete headers.Authorization;
+
         const response: AxiosResponse<T> = await this.axios.post(`${this.baseUrl}${url}`, data, {
             ...config,
             headers,

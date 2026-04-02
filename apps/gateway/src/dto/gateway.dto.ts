@@ -672,3 +672,45 @@ export class WithdrawCryptoDto {
     narration?: string;
 }
 
+export class RateCalculatorDto {
+    @ApiProperty({ description: 'The currency to convert from', example: 'USDT' })
+    @IsString()
+    @IsNotEmpty()
+    sourceCurrency: string;
+
+    @ApiProperty({ description: 'The currency to convert to', example: 'NGN' })
+    @IsString()
+    @IsNotEmpty()
+    targetCurrency: string;
+
+    @ApiProperty({ description: 'The amount to convert (in source currency)', example: 100 })
+    @IsNumber()
+    @Min(0)
+    amount: number;
+}
+
+export class RateCalculatorResponseDto {
+    @ApiProperty({ example: 'USDT' })
+    sourceCurrency: string;
+
+    @ApiProperty({ example: 'NGN' })
+    targetCurrency: string;
+
+    @ApiProperty({ example: 100 })
+    sourceAmount: number;
+
+    @ApiProperty({ example: 1550.50 })
+    rate: number;
+
+    @ApiProperty({ example: 155050.00 })
+    grossPayout: number;
+
+    @ApiProperty({ example: 2325.75 })
+    adminFee: number;
+
+    @ApiProperty({ example: 152724.25 })
+    netPayout: number;
+
+    @ApiProperty({ example: '1 USDT ≈ 1,550.50 NGN' })
+    estimatedPrice: string;
+}

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { GatewayController } from './gateway.controller';
+import { InternalController } from './internal.controller';
 import { S3Service } from '@app/common';
 import { GatewayService } from './gateway.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
@@ -49,7 +50,7 @@ import { JwtStrategy } from './jwt.strategy';
       },
     ]),
   ],
-  controllers: [GatewayController],
+  controllers: [GatewayController, InternalController],
   providers: [GatewayService, GoogleStrategy, JwtStrategy, S3Service],
 })
 export class GatewayModule { }
