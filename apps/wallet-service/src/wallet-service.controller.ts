@@ -37,13 +37,28 @@ export class WalletServiceController {
   }
 
   @MessagePattern({ cmd: 'convert-quote' })
-  async handleConvertQuote(@Payload() data: { userId: string; sourceCurrency: string; targetCurrency: string; amount: number }) {
-    return this.walletService.getConversionQuote(data.userId, data.sourceCurrency, data.targetCurrency, data.amount);
+  async handleConvertQuote(@Payload() data: { userId: string; sourceCurrency: string; targetCurrency: string; amount: number; action?: string }) {
+    return this.walletService.getConversionQuote(data.userId, data.sourceCurrency, data.targetCurrency, data.amount, data.action);
   }
 
   @MessagePattern({ cmd: 'check-rate' })
-  async handleCheckRate(@Payload() data: { source: string; target: string; amount: number }) {
+  async handleCheckRate(@Payload() data: { source: string; target: string; amount: number; action?: string }) {
     return this.walletService.calculateRate(data);
+  }
+
+  @MessagePattern({ cmd: 'get-currencies' })
+  async handleGetCurrencies() {
+    return this.walletService.getCurrencies();
+  }
+
+  @MessagePattern({ cmd: 'get-grouped-pairs' })
+  async handleGetGroupedPairs() {
+    return this.walletService.getGroupedPairs();
+  }
+
+  @MessagePattern({ cmd: 'get-pairs' })
+  async handleGetPairs() {
+    return this.walletService.getPairs();
   }
 
   @MessagePattern({ cmd: 'convert-execute' })

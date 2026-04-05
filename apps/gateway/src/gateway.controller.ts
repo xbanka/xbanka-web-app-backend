@@ -5,7 +5,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 
 @Controller()
@@ -120,6 +120,16 @@ export class GatewayController {
   @ApiTags('wallet')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Calculate exchange rate (Rate Calculator)', description: 'Fetches the current exchange rate and estimated payout without creating a quote record.' })
+  @ApiResponse({ status: 200, description: 'Rate calculation result', type: RateCalculatorResponseDto })
+  @Post('wallets/convert/check-rate')
+  async checkRate(@Req() req, @Body() data: RateCalculatorDto) {
+    return this.walletClient.send({ cmd: 'check-rate' }, { ...data, source: data.sourceCurrency, target: data.targetCurrency });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Get a conversion quote', description: 'Fetches a quote for converting between currencies, including administrative fees.' })
   @ApiResponse({ status: 200, description: 'Conversion quote', type: ConvertQuoteResponseDto })
   @Post('wallets/convert/quote')
@@ -145,6 +155,36 @@ export class GatewayController {
   @Post('wallets/withdraw/crypto')
   async withdrawCrypto(@Req() req, @Body() data: WithdrawCryptoDto) {
     return this.walletClient.send({ cmd: 'withdraw-crypto' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  // @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get available tradeable currencies', description: 'Returns a list of all tradeable currencies from the provider.' })
+  @ApiResponse({ status: 200, description: 'List of tradeable currencies' })
+  @Get('wallet/assets/currencies')
+  async getCurrencies() {
+    return this.walletClient.send({ cmd: 'get-currencies' }, {});
+  }
+  
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  // @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get available tradeable pairs grouped by source currency', description: 'Returns a mapping of which source currencies can be converted to which target currencies.' })
+  @ApiResponse({ status: 200, description: 'List of tradeable pairs grouped by source currency' })
+  @Get('wallet/assets/grouped-pairs')
+  async getGroupedPairs() {
+    return this.walletClient.send({ cmd: 'get-grouped-pairs' }, {});
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  // @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get all available tradeable pairs', description: 'Returns a list of all tradeable currency pairs from the provider.' })
+  @ApiResponse({ status: 200, description: 'List of tradeable pairs' })
+  @Get('wallet/assets/pairs')
+  async getPairs() {
+    return this.walletClient.send({ cmd: 'get-pairs' }, {});
   }
 
   @ApiTags('wallet')

@@ -18,7 +18,16 @@ async function testRateCalculator() {
     const target = 'NGN';
     const amount = 20; // Like in the user image
 
-    console.log(`Step 1: Calculating rate for ${amount} ${source} -> ${target}`);
+    console.log(`Step 1: Fetching available currencies...`);
+    try {
+        const currencies = await service.getCurrencies();
+        console.log('Available Currencies:');
+        console.log(JSON.stringify(currencies, null, 2));
+    } catch (error) {
+        console.error('Error fetching currencies:', error.message);
+    }
+
+    console.log(`\nStep 2: Calculating rate for ${amount} ${source} -> ${target}`);
     try {
         const result = await service.calculateRate({ source, target, amount });
         console.log('Calculation Result:');

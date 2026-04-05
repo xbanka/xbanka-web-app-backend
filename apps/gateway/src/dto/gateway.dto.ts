@@ -593,6 +593,11 @@ export class ConvertQuoteDto {
     @ApiProperty({ description: 'The amount to convert (in source currency)', example: 100 })
     @IsNotEmpty()
     amount: number;
+
+    @ApiProperty({ description: 'Trade action (BUY or SELL)', example: 'SELL', required: false })
+    @IsOptional()
+    @IsString()
+    action?: string;
 }
 
 export class ConvertExecuteDto {
@@ -687,6 +692,11 @@ export class RateCalculatorDto {
     @IsNumber()
     @Min(0)
     amount: number;
+
+    @ApiProperty({ description: 'Trade action (BUY or SELL)', example: 'SELL', required: false })
+    @IsOptional()
+    @IsString()
+    action?: string;
 }
 
 export class RateCalculatorResponseDto {

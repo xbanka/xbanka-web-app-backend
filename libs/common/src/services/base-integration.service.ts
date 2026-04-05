@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 
 @Injectable()
@@ -30,7 +31,13 @@ export abstract class BaseIntegrationService {
                 if (!responseData) {
                     this.logger.debug(error.stack);
                 }
-                throw error;
+                
+                const status = error.response?.status || error.status || 500;
+                throw new RpcException({
+                    message: responseData?.message || error.message,
+                    status: status,
+                    details: responseData || error.message
+                });
             },
         );
     }

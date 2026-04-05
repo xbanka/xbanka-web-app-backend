@@ -115,8 +115,9 @@ export class WalletServiceService {
 
   private async getNgnRate(currency: string): Promise<number | null> {
     try {
-      const quote: any = await this.obiex.createQuote(currency, 'NGN', 1);
-      const rate = quote?.data?.rate || quote?.rate;
+      const quote: any = await this.obiex.createQuote(currency, 'NGNX', 1, 'sell');
+      const data = quote?.data || quote;
+      const rate = data?.rate;
       return typeof rate === 'number' ? rate : null;
     } catch {
       this.logger.warn(`⚠️ Could not fetch NGN rate for ${currency}`);
@@ -537,19 +538,46 @@ export class WalletServiceService {
     }
   }
 
-  async getConversionQuote(userId: string, source: string, target: string, amount: number) {
-    this.logger.log(`🔄 Getting conversion quote for user ${userId}: ${amount} ${source} -> ${target}`);
+  async getConversionQuote(userId: string, source: string, target: string, amount: number, action?: string) {
+    this.logger.log(`🔄 Getting conversion quote for user ${userId}: ${amount} ${source} -> ${target} (action: ${action || 'auto'})`);
 
-    // 1. Get live quote from Obiex
-    const obiexQuote: any = await this.obiex.createQuote(source, target, amount);
+    const pSource = source === 'NGN' ? 'NGNX' : source;
+    const pTarget = target === 'NGN' ? 'NGNX' : target;
+
+    // 1. Find canonical pair and determine side
+    const pairs: any = await this.obiex.getPairs();
+    const pairsData = pairs.data || pairs;
+    const pair = pairsData.find((p: any) => 
+      (p.source.code === pSource && p.target.code === pTarget) ||
+      (p.source.code === pTarget && p.target.code === pSource)
+    );
+
+    if (!pair) {
+      this.logger.error(`❌ Trade pair ${source}/${target} not available on provider`);
+      throw new RpcException({ message: `Trade pair ${source}/${target} not available`, status: 400 });
+    }
+
+    const canonicalSource = pair.source.code;
+    const canonicalTarget = pair.target.code;
+    const side = action?.toLowerCase() || (pSource === canonicalSource ? 'sell' : 'buy');
+
+    this.logger.log(`🔗 Canonical Map: ${source}->${target} => Pair: ${canonicalSource}/${canonicalTarget}, Side: ${side}, Amount: ${amount}`);
+
+    // 2. Get live quote from Obiex with correct side
+    const obiexQuote: any = await this.obiex.createQuote(canonicalSource, canonicalTarget, amount, side);
     const data = obiexQuote.data || obiexQuote;
 
-    // 2. Calculate admin fee
-    const grossPayout = data.amount || data.payout;
+    // 3. Calculate admin fee
+    // Obiex returns amountReceived for the target amount
+    const grossPayout = data.amountReceived || data.payout || data.amount;
     const fee = await this.calculateAdminFee(source, target, grossPayout || 0);
     const netPayout = (grossPayout || 0) - fee;
 
-    // 3. Store quote internally for logging and to hide Obiex ID
+    // 4. Robust expiry parsing (Obiex uses expiryDate)
+    const rawExpiry = data.expiryDate || data.expiresAt || data.expiry || data.expires_at;
+    const expiresAt = rawExpiry ? new Date(rawExpiry) : new Date(Date.now() + 5 * 60 * 1000);
+
+    // 5. Store quote internally for logging and to hide Obiex ID
     const quote = await this.prisma.conversionQuote.create({
       data: {
         userId,
@@ -561,14 +589,14 @@ export class WalletServiceService {
         grossPayout: grossPayout || 0,
         adminFee: fee,
         netPayout,
-        expiresAt: new Date(data.expiresAt),
+        expiresAt: isNaN(expiresAt.getTime()) ? new Date(Date.now() + 5 * 60 * 1000) : expiresAt,
       },
     });
 
-    this.logger.log(`✅ Saved internal quote: ${quote.id} (Obiex ID: ${quote.obiexQuoteId})`);
+    this.logger.log(`✅ Saved internal quote: ${quote.id} (Obiex ID: ${quote.obiexQuoteId}, Side: ${side})`);
 
     return {
-      quoteId: quote.id, // Internal ID
+      quoteId: quote.id,
       sourceCurrency: source,
       targetCurrency: target,
       sourceAmount: amount,
@@ -576,19 +604,41 @@ export class WalletServiceService {
       grossPayout: grossPayout,
       adminFee: fee,
       netPayout: netPayout,
-      expiresAt: data.expiresAt,
+      expiresAt: quote.expiresAt,
     };
   }
 
-  async calculateRate(data: { source: string; target: string; amount: number }) {
-    this.logger.log(`🔍 Calculating rate: ${data.amount} ${data.source} -> ${data.target}`);
+  async calculateRate(data: { source: string; target: string; amount: number; action?: string }) {
+    this.logger.log(`🔍 Calculating rate: ${data.amount} ${data.source} -> ${data.target} (action: ${data.action || 'auto'})`);
 
-    // 1. Get live quote from Obiex
-    const obiexQuote: any = await this.obiex.getExchangeRate(data.source, data.target, data.amount);
+    const pSource = data.source === 'NGN' ? 'NGNX' : data.source;
+    const pTarget = data.target === 'NGN' ? 'NGNX' : data.target;
+
+    // 1. Find canonical pair and determine side
+    const pairs: any = await this.obiex.getPairs();
+    const pairsData = pairs.data || pairs;
+    const pair = pairsData.find((p: any) => 
+      (p.source.code === pSource && p.target.code === pTarget) ||
+      (p.source.code === pTarget && p.target.code === pSource)
+    );
+
+    if (!pair) {
+      this.logger.error(`❌ Trade pair ${data.source}/${data.target} not available on provider`);
+      throw new RpcException({ message: `Trade pair ${data.source}/${data.target} not available`, status: 400 });
+    }
+
+    const canonicalSource = pair.source.code;
+    const canonicalTarget = pair.target.code;
+    const side = data.action?.toLowerCase() || (pSource === canonicalSource ? 'sell' : 'buy');
+
+    this.logger.log(`🔗 Canonical Map (Rate): ${data.source}->${data.target} => Pair: ${canonicalSource}/${canonicalTarget}, Side: ${side}`);
+
+    // 2. Get live quote from Obiex
+    const obiexQuote: any = await this.obiex.getExchangeRate(canonicalSource, canonicalTarget, data.amount, side);
     const quoteData = obiexQuote.data || obiexQuote;
 
-    // 2. Calculate admin fee
-    const grossPayout = quoteData.amount || quoteData.payout;
+    // 3. Calculate admin fee
+    const grossPayout = quoteData.amountReceived || quoteData.payout || quoteData.amount;
     const fee = await this.calculateAdminFee(data.source, data.target, grossPayout || 0);
     const netPayout = (grossPayout || 0) - fee;
 
@@ -602,6 +652,21 @@ export class WalletServiceService {
       netPayout,
       estimatedPrice: `1 ${data.source} ≈ ${quoteData.rate.toLocaleString()} ${data.target}`,
     };
+  }
+
+  async getCurrencies() {
+    this.logger.log(`🔍 Fetching available currencies from provider`);
+    return this.obiex.getCurrencies();
+  }
+
+  async getGroupedPairs() {
+    this.logger.log(`🔍 Fetching grouped tradeable pairs from provider`);
+    return this.obiex.getGroupedPairs();
+  }
+
+  async getPairs() {
+    this.logger.log(`🔍 Fetching all tradeable pairs from provider`);
+    return this.obiex.getPairs();
   }
 
   async executeConversion(userId: string, quoteId: string, source: string, target: string, amount: number) {

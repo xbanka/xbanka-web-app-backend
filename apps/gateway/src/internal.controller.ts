@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Inject, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Inject, UseGuards } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiHeader } from '@nestjs/swagger';
 import { InternalApiKeyGuard } from './internal-api-key.guard';
@@ -28,6 +28,22 @@ export class InternalController {
       source: data.sourceCurrency,
       target: data.targetCurrency,
       amount: data.amount,
+      action: data.action,
     });
+  }
+
+  @ApiOperation({ 
+    summary: 'Get available currencies', 
+    description: 'Requires x-internal-key header. Fetches list of all tradeable currencies.' 
+  })
+  @ApiHeader({
+    name: 'x-internal-key',
+    description: 'Internal API Key for authentication',
+    required: true,
+  })
+  @ApiResponse({ status: 200, description: 'List of currencies' })
+  @Get('wallet/currencies')
+  async getCurrencies() {
+    return this.walletClient.send({ cmd: 'get-currencies' }, {});
   }
 }

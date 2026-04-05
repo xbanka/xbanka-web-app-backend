@@ -50,15 +50,22 @@ export class ObiexService extends BaseIntegrationService {
         });
     }
 
-    async createQuote(sourceId: string, targetId: string, amount: number) {
+    async getPairs() {
+        const path = '/trades/pairs';
+        return this.get(path, {
+            headers: this.getObiexHeaders('GET', path),
+        });
+    }
+
+    async createQuote(sourceId: string, targetId: string, amount: number, side: string = 'sell') {
         const path = '/trades/quote';
-        return this.post(path, { sourceId, targetId, amount }, {
+        return this.post(path, { sourceId, targetId, amount, side }, {
             headers: this.getObiexHeaders('POST', path),
         });
     }
 
-    async getExchangeRate(sourceId: string, targetId: string, amount: number) {
-        return this.createQuote(sourceId, targetId, amount);
+    async getExchangeRate(sourceId: string, targetId: string, amount: number, side: string = 'sell') {
+        return this.createQuote(sourceId, targetId, amount, side);
     }
 
     async acceptQuote(quoteId: string) {
