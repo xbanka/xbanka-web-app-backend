@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { DatabaseService } from '@app/database';
-import { ObiexService, NubanService, NubanApiService } from '@app/common';
+import { ObiexService, NubanService, NubanApiService, PaystackService } from '@app/common';
 import { WalletType } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
@@ -14,6 +14,7 @@ export class WalletServiceService {
     private readonly obiex: ObiexService,
     private readonly nuban: NubanService,
     private readonly nubanApi: NubanApiService,
+    private readonly paystack: PaystackService,
   ) { }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
@@ -846,5 +847,95 @@ export class WalletServiceService {
 
       throw new RpcException({ message: `Withdrawal failed: ${error.message}`, status: 500 });
     }
+  }
+
+  async initiateFiatDeposit(userId: string, amount: number) {
+    this.logger.log(`🔄 Initiating fiat deposit for user ${userId}: ${amount} NGN`);
+
+    // 1. Ensure user has a fiat wallet
+    const wallet = await this.prisma.wallet.upsert({
+      where: { userId_currency: { userId, currency: 'NGN' } },
+      create: { userId, currency: 'NGN', type: 'FIAT', balance: 0 },
+      update: {},
+    });
+
+    // 2. Create pending transaction
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        userId,
+        type: 'DEPOSIT',
+        status: 'PENDING',
+        amount,
+        currency: 'NGN',
+        reference: `DEP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        note: `Funding NGN wallet via Paystack`,
+      },
+    });
+
+    // 3. Initialize Paystack
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const paystackResponse = await this.paystack.initializeTransaction({
+      email: user.email,
+      amount,
+      reference: transaction.reference,
+      metadata: { userId, transactionId: transaction.id },
+    });
+
+    return {
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      ...paystackResponse.data,
+    };
+  }
+
+  async verifyFiatDeposit(reference: string) {
+    this.logger.log(`🔍 Verifying fiat deposit: ${reference}`);
+
+    // 1. Fetch transaction
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { reference },
+    });
+
+    if (!transaction || transaction.type !== 'DEPOSIT') {
+      throw new RpcException({ message: 'Transaction not found or invalid type', status: 404 });
+    }
+
+    if (transaction.status === 'COMPLETED') {
+      return { status: 'SUCCESS', message: 'Transaction already completed', transaction };
+    }
+
+    // 2. Verify with Paystack
+    const paystackResponse = await this.paystack.verifyTransaction(reference);
+    const data = paystackResponse.data;
+
+    if (data.status === 'success') {
+      const amount = data.amount / 100; // Paystack returns in kobo
+
+      // 3. Atomic update
+      return this.prisma.$transaction(async (tx) => {
+        const wallet = await tx.wallet.findUnique({
+          where: { userId_currency: { userId: transaction.userId, currency: transaction.currency } },
+        });
+
+        if (!wallet) throw new RpcException({ message: 'Wallet not found', status: 404 });
+
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: amount } },
+        });
+
+        const updatedTx = await tx.transaction.update({
+          where: { id: transaction.id },
+          data: { status: 'COMPLETED', amount },
+        });
+
+        this.logger.log(`✅ Fiat deposit successful: ${reference}. Credited ${amount} ${transaction.currency}`);
+        return { status: 'SUCCESS', transaction: updatedTx };
+      });
+    }
+
+    return { status: data.status, message: 'Transaction not successful on Paystack' };
   }
 }

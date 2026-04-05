@@ -724,3 +724,21 @@ export class RateCalculatorResponseDto {
     @ApiProperty({ example: '1 USDT ≈ 1,550.50 NGN' })
     estimatedPrice: string;
 }
+
+export class InitiateFundingDto {
+    @ApiProperty({ description: 'The amount to fund in NGN', example: 5000 })
+    @IsNumber()
+    @Min(100)
+    amount: number;
+}
+
+export class FundingResponseDto {
+    @ApiProperty({ description: 'The Paystack authorization URL', example: 'https://paystack.com/checkout/...' })
+    authorization_url: string;
+
+    @ApiProperty({ description: 'The unique transaction reference', example: 'DEP-123456789' })
+    reference: string;
+
+    @ApiProperty({ description: 'The Paystack access code', example: '...' })
+    access_code: string;
+}

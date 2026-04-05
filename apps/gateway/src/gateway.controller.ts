@@ -1,12 +1,13 @@
-import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile, Param, BadRequestException, Headers } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Observable, map, firstValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
+import { PaystackWebhookGuard } from './guards/paystack-webhook.guard';
 
 @Controller()
 export class GatewayController {
@@ -155,6 +156,39 @@ export class GatewayController {
   @Post('wallets/withdraw/crypto')
   async withdrawCrypto(@Req() req, @Body() data: WithdrawCryptoDto) {
     return this.walletClient.send({ cmd: 'withdraw-crypto' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Initiate a fiat wallet deposit', description: 'Starts a fiat deposit via Paystack. Returns a checkout URL.' })
+  @ApiResponse({ status: 200, description: 'Initialization successful', type: FundingResponseDto })
+  @Post('wallets/fiat/fund/initiate')
+  async initiateFiatDeposit(@Req() req, @Body() data: InitiateFundingDto) {
+    return this.walletClient.send({ cmd: 'initiate-fiat-deposit' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Verify a fiat wallet deposit', description: 'Manually triggers a verification check for a Paystack transaction.' })
+  @ApiResponse({ status: 200, description: 'Verification check complete' })
+  @Get('wallets/fiat/fund/verify/:reference')
+  async verifyFiatDeposit(@Param('reference') reference: string) {
+    return this.walletClient.send({ cmd: 'verify-fiat-deposit' }, { reference });
+  }
+
+  @ApiTags('wallet')
+  @ApiOperation({ summary: 'Paystack Webhook', description: 'Global webhook for Paystack payment notifications.' })
+  @UseGuards(PaystackWebhookGuard)
+  @Post('wallets/webhook/paystack')
+  async paystackWebhook(@Body() data: any, @Headers('x-paystack-signature') signature: string) {
+    // Webhook verification logic (initially handled here or via a Guard)
+    if (data.event === 'charge.success') {
+      const reference = data.data.reference;
+      return this.walletClient.send({ cmd: 'verify-fiat-deposit' }, { reference });
+    }
+    return { status: 'handled' };
   }
 
   @ApiTags('wallet')

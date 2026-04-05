@@ -115,4 +115,14 @@ export class WalletServiceController {
   async handleWithdrawCrypto(@Payload() data: { userId: string; currency: string; network: string; address: string; amount: number; memo?: string; narration?: string }) {
     return this.walletService.withdrawCrypto(data.userId, data);
   }
+
+  @MessagePattern({ cmd: 'initiate-fiat-deposit' })
+  async handleInitiateFiatDeposit(@Payload() data: { userId: string; amount: number }) {
+    return this.walletService.initiateFiatDeposit(data.userId, data.amount);
+  }
+
+  @MessagePattern({ cmd: 'verify-fiat-deposit' })
+  async handleVerifyFiatDeposit(@Payload() data: { reference: string }) {
+    return this.walletService.verifyFiatDeposit(data.reference);
+  }
 }
