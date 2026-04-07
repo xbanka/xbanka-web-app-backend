@@ -731,11 +731,26 @@ export class InitiateFundingDto {
     @Min(100)
     amount: number;
 
-
     @ApiProperty({ description: 'Frontend URL to redirect to after direct debit mandate approval', example: 'https://app.xbankang.com/mandate-success', required: false })
     @IsOptional()
     @IsString()
     callback_url?: string;
+
+    @ApiProperty({ description: 'Set to true if you want to tokenize and save the card used for this deposit', example: true, required: false })
+    @IsOptional()
+    saveCard?: boolean;
+}
+
+export class ChargeSavedCardDto {
+    @ApiProperty({ description: 'The saved card ID', example: 'saved-card-uuid-123' })
+    @IsString()
+    @IsNotEmpty()
+    savedCardId: string;
+
+    @ApiProperty({ description: 'The amount to charge the user', example: 5000 })
+    @IsNumber()
+    @Min(100)
+    amount: number;
 }
 
 export class FundingResponseDto {

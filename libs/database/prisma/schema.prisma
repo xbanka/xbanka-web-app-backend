@@ -93,6 +93,8 @@ model User {
   conversionQuotes ConversionQuote[]
   /// Direct Debit Mandates.
   directDebitMandates DirectDebitMandate[]
+  /// Saved Cards.
+  savedCards     SavedCard[]
 }
 
 /// Enum representing the type of wallet.
@@ -594,4 +596,26 @@ model DirectDebitMandate {
 
   @@index([userId])
   @@index([status])
+}
+
+/// Stores tokenized cards for 1-click funding.
+model SavedCard {
+  /// Unique identifier (UUID).
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  /// The authorization code to charge the card.
+  authorizationCode String
+  cardType          String?
+  last4             String?
+  expMonth          String?
+  expYear           String?
+  bank              String?
+  countryCode       String?
+  brand             String?
+  reusable          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
 }

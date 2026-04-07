@@ -117,8 +117,8 @@ export class WalletServiceController {
   }
 
   @MessagePattern({ cmd: 'initiate-fiat-deposit' })
-  async handleInitiateFiatDeposit(@Payload() data: { userId: string; amount: number }) {
-    return this.walletService.initiateFiatDeposit(data.userId, data.amount);
+  async handleInitiateFiatDeposit(@Payload() data: { userId: string; amount: number; callback_url?: string; saveCard?: boolean }) {
+    return this.walletService.initiateFiatDeposit(data.userId, data.amount, data.callback_url, data.saveCard);
   }
 
   @MessagePattern({ cmd: 'verify-fiat-deposit' })
@@ -149,5 +149,20 @@ export class WalletServiceController {
   @MessagePattern({ cmd: 'handle-direct-debit-webhook' })
   async handleDirectDebitWebhook(@Payload() payload: any) {
     return this.walletService.handleDirectDebitWebhook(payload);
+  }
+
+  @MessagePattern({ cmd: 'get-saved-cards' })
+  async handleGetSavedCards(@Payload() data: { userId: string }) {
+    return this.walletService.getSavedCards(data.userId);
+  }
+
+  @MessagePattern({ cmd: 'charge-saved-card' })
+  async handleChargeSavedCard(@Payload() data: { userId: string; savedCardId: string; amount: number }) {
+    return this.walletService.chargeSavedCard(data.userId, data.savedCardId, data.amount);
+  }
+
+  @MessagePattern({ cmd: 'delete-saved-card' })
+  async handleDeleteSavedCard(@Payload() data: { userId: string; cardId: string }) {
+    return this.walletService.deleteSavedCard(data.userId, data.cardId);
   }
 }

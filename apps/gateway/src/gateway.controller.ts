@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile, Param, BadRequestException, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile, Param, BadRequestException, Headers, Delete } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Observable, map, firstValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 import { PaystackWebhookGuard } from './guards/paystack-webhook.guard';
 
@@ -165,7 +165,7 @@ export class GatewayController {
   @ApiResponse({ status: 200, description: 'Initialization successful', type: FundingResponseDto })
   @Post('wallets/fiat/fund/initiate')
   async initiateFiatDeposit(@Req() req, @Body() data: InitiateFundingDto) {
-    return this.walletClient.send({ cmd: 'initiate-fiat-deposit' }, { userId: req.user.id, ...data });
+    return this.walletClient.send({ cmd: 'initiate-fiat-deposit' }, { userId: req.user.id, amount: data.amount, saveCard: data.saveCard });
   }
 
   @ApiTags('wallet')
@@ -177,6 +177,37 @@ export class GatewayController {
   async verifyFiatDeposit(@Param('reference') reference: string) {
     return this.walletClient.send({ cmd: 'verify-fiat-deposit' }, { reference });
   }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get saved cards', description: 'Retrieve logic for users saved funding cards.' })
+  @ApiResponse({ status: 200, description: 'User saved cards' })
+  @Get('wallets/fiat/saved-cards')
+  async getSavedCards(@Req() req) {
+    return this.walletClient.send({ cmd: 'get-saved-cards' }, { userId: req.user.id });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Charge a saved card', description: 'Fund your fiat wallet using an already saved tokenized card.' })
+  @ApiResponse({ status: 200, description: 'Charge processed successfully' })
+  @Post('wallets/fiat/fund/saved-card')
+  async chargeSavedCard(@Req() req, @Body() data: ChargeSavedCardDto) {
+    return this.walletClient.send({ cmd: 'charge-saved-card' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Delete a saved card', description: 'Delete a previously saved card.' })
+  @ApiResponse({ status: 200, description: 'Card deleted' })
+  @Delete('wallets/fiat/saved-cards/:cardId')
+  async deleteSavedCard(@Req() req, @Param('cardId') cardId: string) {
+    return this.walletClient.send({ cmd: 'delete-saved-card' }, { userId: req.user.id, cardId });
+  }
+
 
   @ApiTags('wallet')
   @ApiOperation({ summary: 'Paystack Webhook', description: 'Global webhook for Paystack payment notifications.' })

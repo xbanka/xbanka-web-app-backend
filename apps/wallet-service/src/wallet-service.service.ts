@@ -332,8 +332,8 @@ export class WalletServiceService {
     });
 
     if (normalizedStatus === 'COMPLETED') {
-      await this.prisma.$transaction([
-        this.prisma.transaction.upsert({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.transaction.upsert({
           where: { reference },
           create: {
             userId,
@@ -345,12 +345,33 @@ export class WalletServiceService {
             note: `Fiat deposit via ${provider}`,
           },
           update: { status: 'COMPLETED', amount },
-        }),
-        this.prisma.wallet.update({
+        });
+
+        await tx.wallet.update({
           where: { id: wallet.id },
           data: { balance: { increment: amount } },
-        }),
-      ]);
+        });
+
+        // Save card if requested and reusable (Paystack formatting)
+        const authorization = payload?.data?.authorization;
+        if (payload?.data?.metadata?.saveCard === true && authorization?.reusable === true) {
+          await tx.savedCard.create({
+            data: {
+              userId,
+              authorizationCode: authorization.authorization_code,
+              cardType: authorization.card_type,
+              last4: authorization.last4,
+              expMonth: authorization.exp_month,
+              expYear: authorization.exp_year,
+              bank: authorization.bank,
+              countryCode: authorization.country_code,
+              brand: authorization.brand,
+              reusable: true,
+            },
+          });
+          this.logger.log(`💳 Webhook saved card for user ${userId}: ${authorization.last4}`);
+        }
+      });
       this.logger.log(`✅ Credited ${amount} ${currency} to wallet ${wallet.id} for user ${userId}`);
     } else {
       await this.prisma.transaction.upsert({
@@ -868,7 +889,7 @@ export class WalletServiceService {
     }
   }
 
-  async initiateFiatDeposit(userId: string, amount: number, callback_url?: string) {
+  async initiateFiatDeposit(userId: string, amount: number, callback_url?: string, saveCard?: boolean) {
     this.logger.log(`🔄 Initiating fiat deposit for user ${userId}: ${amount} NGN`);
 
     // 1. Ensure user has a fiat wallet
@@ -899,7 +920,7 @@ export class WalletServiceService {
       email: user.email,
       amount,
       reference: transaction.reference,
-      metadata: { userId, transactionId: transaction.id },
+      metadata: { userId, transactionId: transaction.id, saveCard },
       callback_url,
     });
 
@@ -950,6 +971,25 @@ export class WalletServiceService {
           where: { id: transaction.id },
           data: { status: 'COMPLETED', amount },
         });
+
+        // Save card if requested and reusable
+        if (data.metadata?.saveCard === true && data.authorization?.reusable === true) {
+          await tx.savedCard.create({
+            data: {
+              userId: transaction.userId,
+              authorizationCode: data.authorization.authorization_code,
+              cardType: data.authorization.card_type,
+              last4: data.authorization.last4,
+              expMonth: data.authorization.exp_month,
+              expYear: data.authorization.exp_year,
+              bank: data.authorization.bank,
+              countryCode: data.authorization.country_code,
+              brand: data.authorization.brand,
+              reusable: true,
+            },
+          });
+          this.logger.log(`💳 Saved card for user ${transaction.userId}: ${data.authorization.last4}`);
+        }
 
         this.logger.log(`✅ Fiat deposit successful: ${reference}. Credited ${amount} ${transaction.currency}`);
         return { status: 'SUCCESS', transaction: updatedTx };
@@ -1165,5 +1205,83 @@ export class WalletServiceService {
     }
 
     return { received: true };
+  }
+
+  async getSavedCards(userId: string) {
+    this.logger.log(`💳 Fetching saved cards for user ${userId}`);
+    return this.prisma.savedCard.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        last4: true,
+        expMonth: true,
+        expYear: true,
+        bank: true,
+        brand: true,
+        cardType: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async chargeSavedCard(userId: string, savedCardId: string, amount: number) {
+    this.logger.log(`💸 Charging saved card ${savedCardId} for user ${userId}, amount ${amount}`);
+
+    const savedCard = await this.prisma.savedCard.findUnique({
+      where: { id: savedCardId, userId },
+    });
+
+    if (!savedCard || !savedCard.authorizationCode) {
+      throw new RpcException({ message: 'Saved card not found or invalid', status: 404 });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const reference = `SC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        userId,
+        type: 'DEPOSIT',
+        status: 'PENDING',
+        amount,
+        currency: 'NGN',
+        reference,
+        note: `Wallet funding via saved card`,
+      },
+    });
+
+    const paystackResponse = await this.paystack.chargeAuthorization({
+      authorization_code: savedCard.authorizationCode,
+      email: user.email,
+      amount,
+      reference,
+      currency: 'NGN',
+    });
+
+    return {
+      message: 'Processing saved card charge request',
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      status: paystackResponse.data.status,
+    };
+  }
+
+  async deleteSavedCard(userId: string, cardId: string) {
+    this.logger.log(`🗑️ Deleting saved card ${cardId} for user ${userId}`);
+
+    const card = await this.prisma.savedCard.findUnique({
+      where: { id: cardId, userId },
+    });
+
+    if (!card) throw new RpcException({ message: 'Saved card not found', status: 404 });
+
+    await this.prisma.savedCard.delete({
+      where: { id: cardId },
+    });
+
+    return { status: 'SUCCESS', message: 'Saved card deleted successfully' };
   }
 }
