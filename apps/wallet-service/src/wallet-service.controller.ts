@@ -125,4 +125,29 @@ export class WalletServiceController {
   async handleVerifyFiatDeposit(@Payload() data: { reference: string }) {
     return this.walletService.verifyFiatDeposit(data.reference);
   }
+
+  @MessagePattern({ cmd: 'initiate-direct-debit' })
+  async handleInitiateDirectDebit(@Payload() data: { userId: string; callback_url?: string; accountNumber?: string; bankCode?: string }) {
+    return this.walletService.initiateDirectDebit(data.userId, data.callback_url, data.accountNumber, data.bankCode);
+  }
+
+  @MessagePattern({ cmd: 'verify-direct-debit' })
+  async handleVerifyDirectDebit(@Payload() data: { reference: string }) {
+    return this.walletService.verifyDirectDebit(data.reference);
+  }
+
+  @MessagePattern({ cmd: 'charge-direct-debit' })
+  async handleChargeDirectDebit(@Payload() data: { userId: string; mandateId: string; amount: number }) {
+    return this.walletService.chargeDirectDebit(data.userId, data.mandateId, data.amount);
+  }
+
+  @MessagePattern({ cmd: 'deactivate-direct-debit' })
+  async handleDeactivateDirectDebit(@Payload() data: { userId: string; mandateId: string }) {
+    return this.walletService.deactivateDirectDebit(data.userId, data.mandateId);
+  }
+
+  @MessagePattern({ cmd: 'handle-direct-debit-webhook' })
+  async handleDirectDebitWebhook(@Payload() payload: any) {
+    return this.walletService.handleDirectDebitWebhook(payload);
+  }
 }

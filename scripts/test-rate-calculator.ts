@@ -12,9 +12,9 @@ async function testRateCalculator() {
 
     const prisma = new DatabaseService();
     const obiex = new ObiexService();
-    const service = new WalletServiceService(prisma, obiex, null as any, null as any);
+    const service = new WalletServiceService(prisma, obiex, null as any, null as any, null as any);
 
-    const source = 'USDT';
+    const source = 'BTC';
     const target = 'NGN';
     const amount = 20; // Like in the user image
 

@@ -5,7 +5,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 import { PaystackWebhookGuard } from './guards/paystack-webhook.guard';
 
@@ -183,12 +183,55 @@ export class GatewayController {
   @UseGuards(PaystackWebhookGuard)
   @Post('wallets/webhook/paystack')
   async paystackWebhook(@Body() data: any, @Headers('x-paystack-signature') signature: string) {
-    // Webhook verification logic (initially handled here or via a Guard)
     if (data.event === 'charge.success') {
       const reference = data.data.reference;
       return this.walletClient.send({ cmd: 'verify-fiat-deposit' }, { reference });
+    } else if (data.event === 'direct_debit.authorization.created' || data.event === 'direct_debit.authorization.active') {
+      // Direct debit authorization payload, redirect to the new webhook handler in wallet.
+      // Payload structure: { event: string, data: any }
+      return this.walletClient.send({ cmd: 'handle-direct-debit-webhook' }, data);
     }
     return { status: 'handled' };
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Initiate Direct Debit Authorization', description: 'Initializes a Paystack direct debit mandate for the user.' })
+  @ApiResponse({ status: 200, description: 'Initialization successful' })
+  @Post('wallets/fiat/direct-debit/initiate')
+  async initiateDirectDebit(@Req() req, @Body() data: DirectDebitInitiateDto) {
+    return this.walletClient.send({ cmd: 'initiate-direct-debit' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Verify Direct Debit Authorization', description: 'Checks the status of the authorization.' })
+  @ApiResponse({ status: 200, description: 'Verification successful' })
+  @Get('wallets/fiat/direct-debit/verify/:reference')
+  async verifyDirectDebit(@Req() req, @Param('reference') reference: string) {
+    return this.walletClient.send({ cmd: 'verify-direct-debit' }, { reference });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Charge Direct Debit Mandate', description: 'Executes a charge on an active direct debit mandate to fund wallet.' })
+  @ApiResponse({ status: 200, description: 'Charge processed successfully' })
+  @Post('wallets/fiat/direct-debit/charge')
+  async chargeDirectDebit(@Req() req, @Body() data: DirectDebitChargeDto) {
+    return this.walletClient.send({ cmd: 'charge-direct-debit' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Deactivate Direct Debit Mandate', description: 'Deactivates an active direct debit mandate.' })
+  @ApiResponse({ status: 200, description: 'Mandate deactivated' })
+  @Post('wallets/fiat/direct-debit/deactivate')
+  async deactivateDirectDebit(@Req() req, @Body() data: DirectDebitDeactivateDto) {
+    return this.walletClient.send({ cmd: 'deactivate-direct-debit' }, { userId: req.user.id, ...data });
   }
 
   @ApiTags('wallet')

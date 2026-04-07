@@ -634,8 +634,27 @@ export class WalletServiceService {
 
     this.logger.log(`🔗 Canonical Map (Rate): ${data.source}->${data.target} => Pair: ${canonicalSource}/${canonicalTarget}, Side: ${side}`);
 
-    // 2. Get live quote from Obiex
-    const obiexQuote: any = await this.obiex.getExchangeRate(canonicalSource, canonicalTarget, data.amount, side);
+    // 2. Get live quote from Obiex — intercept minimum-amount errors for a clear user message
+    let obiexQuote: any;
+    try {
+      obiexQuote = await this.obiex.getExchangeRate(canonicalSource, canonicalTarget, data.amount, side);
+    } catch (err) {
+      const details = err?.error?.details || err?.details;
+      const errors: any[] = Array.isArray(details?.errors) ? details.errors : [];
+      const minimumError = errors.find((e: any) => /minimum/i.test(e.message));
+      if (minimumError) {
+        // Extract the minimum value from Obiex's error message, e.g. "Amount is below minimum of 1,446 NGNX"
+        const match = minimumError.message.match(/minimum of ([\d,]+(?:\.\d+)?)\s*(\w+)/i);
+        const minAmount = match ? match[1] : '?';
+        const minCurrency = match ? match[2].replace('NGNX', 'NGN') : data.target;
+        this.logger.warn(`⚠️ Rate calculator rejected amount ${data.amount}: below minimum of ${minAmount} ${minCurrency}`);
+        throw new RpcException({
+          message: `Minimum amount is ${minAmount} ${minCurrency}.`,
+          status: 400,
+        });
+      }
+      throw err; // re-throw unexpected errors as-is
+    }
     const quoteData = obiexQuote.data || obiexQuote;
 
     // 3. Calculate admin fee
@@ -849,7 +868,7 @@ export class WalletServiceService {
     }
   }
 
-  async initiateFiatDeposit(userId: string, amount: number) {
+  async initiateFiatDeposit(userId: string, amount: number, callback_url?: string) {
     this.logger.log(`🔄 Initiating fiat deposit for user ${userId}: ${amount} NGN`);
 
     // 1. Ensure user has a fiat wallet
@@ -881,6 +900,7 @@ export class WalletServiceService {
       amount,
       reference: transaction.reference,
       metadata: { userId, transactionId: transaction.id },
+      callback_url,
     });
 
     return {
@@ -937,5 +957,213 @@ export class WalletServiceService {
     }
 
     return { status: data.status, message: 'Transaction not successful on Paystack' };
+  }
+
+  async initiateDirectDebit(userId: string, callback_url?: string, accountNumber?: string, bankCode?: string) {
+    this.logger.log(`🔄 Initiating direct debit for user ${userId}`);
+
+    // Validate bank code if provided for direct debit
+    const supportedBanks = [
+      '044', '023', '050', '214', '070', '011', '058', '030', 
+      '082', '076', '101', '221', '068', '232', '100', '032', 
+      '033', '215', '035', '057'
+    ];
+
+    if (bankCode && !supportedBanks.includes(bankCode)) {
+      throw new RpcException({ message: 'Bank not supported for direct debit by Paystack.', status: 400 });
+    }
+
+    if ((bankCode && !accountNumber) || (!bankCode && accountNumber)) {
+      throw new RpcException({ message: 'Both accountNumber and bankCode must be provided together, or neither.', status: 400 });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const reference = `DD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Create a pending mandate record
+    const mandate = await this.prisma.directDebitMandate.create({
+      data: {
+        userId,
+        provider: 'PAYSTACK',
+        reference,
+        status: 'PENDING',
+      },
+    });
+
+    const payload: any = {
+      email: user.email,
+      callback_url,
+      reference,
+    };
+
+    if (accountNumber && bankCode) {
+      payload.account = {
+        number: accountNumber,
+        bank_code: bankCode,
+      };
+    }
+
+    const paystackResponse = await this.paystack.initializeDirectDebitAuthorization(payload);
+
+    return {
+      mandateId: mandate.id,
+      reference: mandate.reference,
+      ...paystackResponse.data,
+    };
+  }
+
+  async verifyDirectDebit(reference: string) {
+    this.logger.log(`🔍 Verifying direct debit mandate: ${reference}`);
+
+    const mandate = await this.prisma.directDebitMandate.findUnique({
+      where: { reference },
+    });
+
+    if (!mandate) throw new RpcException({ message: 'Mandate not found', status: 404 });
+
+    const paystackResponse = await this.paystack.verifyAuthorization(reference);
+    const data = paystackResponse.data;
+
+    if (data.authorization_code) {
+      const updatedMandate = await this.prisma.directDebitMandate.update({
+        where: { id: mandate.id },
+        data: {
+          authorizationCode: data.authorization_code,
+          bank: data.bank,
+          accountName: data.account_name,
+          last4: data.last4,
+          expMonth: data.exp_month,
+          expYear: data.exp_year,
+          channel: data.channel,
+          status: 'ACTIVE',
+        },
+      });
+
+      this.logger.log(`✅ Mandate ${mandate.id} verified and ACTIVE.`);
+      return { status: 'SUCCESS', mandate: updatedMandate };
+    }
+
+    return { status: 'PENDING', message: 'Mandate not yet fully active on provider' };
+  }
+
+  async chargeDirectDebit(userId: string, mandateId: string, amount: number) {
+    this.logger.log(`💸 Charging direct debit ${mandateId} for user ${userId}, amount ${amount}`);
+
+    const mandate = await this.prisma.directDebitMandate.findUnique({
+      where: { id: mandateId, userId },
+    });
+
+    if (!mandate) throw new RpcException({ message: 'Mandate not found', status: 404 });
+    if (mandate.status !== 'ACTIVE' || !mandate.authorizationCode) {
+      throw new RpcException({ message: 'Mandate is not active', status: 400 });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const reference = `CHG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Create pending deposit transaction representing this direct charge
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        userId,
+        type: 'DEPOSIT',
+        status: 'PENDING',
+        amount,
+        currency: 'NGN',
+        reference,
+        note: `Direct Debit charge via ${mandate.provider}`,
+      },
+    });
+
+    const paystackResponse = await this.paystack.chargeAuthorization({
+      authorization_code: mandate.authorizationCode,
+      email: user.email,
+      amount,
+      reference,
+      currency: 'NGN',
+    });
+
+    return {
+      message: 'Processing charge request',
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      status: paystackResponse.data.status,
+    };
+  }
+
+  async deactivateDirectDebit(userId: string, mandateId: string) {
+    this.logger.log(`🛑 Deactivating direct debit mandate ${mandateId} for user ${userId}`);
+
+    const mandate = await this.prisma.directDebitMandate.findUnique({
+      where: { id: mandateId, userId },
+    });
+
+    if (!mandate) throw new RpcException({ message: 'Mandate not found', status: 404 });
+
+    if (mandate.authorizationCode) {
+      await this.paystack.deactivateAuthorization(mandate.authorizationCode);
+    }
+
+    const updatedMandate = await this.prisma.directDebitMandate.update({
+      where: { id: mandate.id },
+      data: { status: 'INACTIVE' },
+    });
+
+    return { status: 'SUCCESS', mandate: updatedMandate };
+  }
+
+  async handleDirectDebitWebhook(payload: any) {
+    const { event, data } = payload;
+    this.logger.log(`📨 Received Direct Debit webhook: ${event}`);
+
+    // If active or created, and it contains an authorization code, we can try to look it up using user email
+    // but without the exact reference it might be tricky unless metadata was passed. 
+    // Thankfully, Paystack usually includes the customer code or email inside the data.customer object.
+    if (event === 'direct_debit.authorization.created' || event === 'direct_debit.authorization.active') {
+      const email = data.customer?.email;
+      if (!email) {
+        this.logger.warn('⚠️ Webhook data missing customer email for authorization mapping');
+        return { received: true };
+      }
+
+      const user = await this.prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        this.logger.warn(`⚠️ User not found for webhook email: ${email}`);
+        return { received: true };
+      }
+
+      // Find the most recent pending mandate for this user.
+      const mandate = await this.prisma.directDebitMandate.findFirst({
+        where: { userId: user.id, status: 'PENDING', provider: 'PAYSTACK' },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!mandate) {
+        this.logger.warn(`⚠️ No pending mandate found for user ${user.id} to attach authorization_code`);
+        return { received: true };
+      }
+
+      // Update mandate
+      await this.prisma.directDebitMandate.update({
+        where: { id: mandate.id },
+        data: {
+          authorizationCode: data.authorization_code,
+          bank: data.bank,
+          accountName: data.account_name,
+          last4: data.last4,
+          expMonth: data.exp_month,
+          expYear: data.exp_year,
+          channel: data.channel,
+          status: event === 'direct_debit.authorization.active' ? 'ACTIVE' : 'PENDING',
+        },
+      });
+
+      this.logger.log(`✅ Webhook updated mandate ${mandate.id} to ${event === 'direct_debit.authorization.active' ? 'ACTIVE' : 'PENDING (with code)'}`);
+    }
+
+    return { received: true };
   }
 }

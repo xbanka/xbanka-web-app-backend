@@ -91,6 +91,8 @@ model User {
   sessions       Session[]
   /// Internal records of conversion quotes.
   conversionQuotes ConversionQuote[]
+  /// Direct Debit Mandates.
+  directDebitMandates DirectDebitMandate[]
 }
 
 /// Enum representing the type of wallet.
@@ -565,4 +567,31 @@ model ConversionQuote {
   createdAt       DateTime @default(now())
 
   @@index([userId])
+}
+
+/// Stores direct debit mandates for recurring or direct bank charges.
+model DirectDebitMandate {
+  /// Unique identifier (UUID).
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  /// The provider handling the mandate (e.g., PAYSTACK).
+  provider          String   @default("PAYSTACK")
+  /// The authorization code returned the provider.
+  authorizationCode String?
+  /// Internal reference used during authorization initialization.
+  reference         String   @unique
+  bank              String?
+  accountName       String?
+  last4             String?
+  expMonth          Int?
+  expYear           Int?
+  channel           String?
+  /// Status of the mandate: PENDING, ACTIVE, INACTIVE.
+  status            String   @default("PENDING")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

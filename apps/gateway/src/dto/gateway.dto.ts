@@ -730,6 +730,12 @@ export class InitiateFundingDto {
     @IsNumber()
     @Min(100)
     amount: number;
+
+
+    @ApiProperty({ description: 'Frontend URL to redirect to after direct debit mandate approval', example: 'https://app.xbankang.com/mandate-success', required: false })
+    @IsOptional()
+    @IsString()
+    callback_url?: string;
 }
 
 export class FundingResponseDto {
@@ -741,4 +747,40 @@ export class FundingResponseDto {
 
     @ApiProperty({ description: 'The Paystack access code', example: '...' })
     access_code: string;
+}
+
+export class DirectDebitInitiateDto {
+    @ApiProperty({ description: 'Frontend URL to redirect to after direct debit mandate approval', example: 'https://app.xbankang.com/mandate-success', required: false })
+    @IsOptional()
+    @IsString()
+    callback_url?: string;
+
+    @ApiProperty({ description: 'Account number to pre-fill the mandate request', example: '0128034955', required: false })
+    @IsOptional()
+    @IsString()
+    accountNumber?: string;
+
+    @ApiProperty({ description: 'Bank code to pre-fill the mandate request. MUST be a supported Paystack direct debit bank code.', example: '058', required: false })
+    @IsOptional()
+    @IsString()
+    bankCode?: string;
+}
+
+export class DirectDebitChargeDto {
+    @ApiProperty({ description: 'The mandate ID', example: 'mandate-uuid-123' })
+    @IsString()
+    @IsNotEmpty()
+    mandateId: string;
+
+    @ApiProperty({ description: 'The amount to charge the user', example: 5000 })
+    @IsNumber()
+    @Min(100)
+    amount: number;
+}
+
+export class DirectDebitDeactivateDto {
+    @ApiProperty({ description: 'The mandate ID you want to deactivate', example: 'mandate-uuid-abc' })
+    @IsString()
+    @IsNotEmpty()
+    mandateId: string;
 }
