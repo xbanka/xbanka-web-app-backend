@@ -59,7 +59,12 @@ export class ObiexService extends BaseIntegrationService {
 
     async createQuote(sourceId: string, targetId: string, amount: number, side: string = 'sell') {
         const path = '/trades/quote';
-        const payload = { sourceId, targetId, amount, side };
+        let payload;
+        if (side === 'sell' || side === 'SELL') {
+            payload = { sourceId, targetId, amount, side };
+        } else {
+            payload = { sourceId, targetId, amountToReceive: amount, side };
+        }
         this.logger.debug(`📤 Obiex quote payload → ${JSON.stringify(payload)}`);
         return this.post(path, payload, {
             headers: this.getObiexHeaders('POST', path),

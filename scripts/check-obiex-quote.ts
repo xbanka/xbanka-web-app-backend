@@ -15,11 +15,13 @@ async function checkObiexQuote() {
   
   const sourceId = 'USDT';
   const targetId = 'NGNX';
-  const amount = 14450; // We hope this is interpreted as 14,450 NGNX
-  const side = 'buy'; 
+  const amount = 10;
+  const side = 'SELL'; 
 
-  console.log(`--- Checking Obiex Quote for ${amount} ${sourceId} -> ${targetId} ---`);
-  
+  const payload = { sourceId, targetId, amount, side };
+  console.log('\n--- Request Payload ---');
+  console.log(JSON.stringify(payload, null, 2));
+
   try {
     // We use the createQuote method which handles the API-KEY, TIMESTAMP, and SIGNATURE automatically
     const response: any = await obiex.createQuote(sourceId, targetId, amount, side);
