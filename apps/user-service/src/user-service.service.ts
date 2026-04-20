@@ -10,7 +10,7 @@ export class UserServiceService {
   async getProfile(data: { userId: string }) {
     const user = await this.prisma.user.findUnique({
       where: { id: data.userId },
-      include: { profile: true },
+      include: { profile: true, kyc: true },
     });
 
     if (!user) {
@@ -20,11 +20,31 @@ export class UserServiceService {
     return {
       userId: user.id,
       email: user.email,
+      isEmailVerified: user.isEmailVerified,
+      currentStep: user.currentStep,
+      referralCode: user.referralCode,
+      isTwoFactorEnabled: user.isTwoFactorEnabled,
+      hasTransactionPin: !!user.transactionPin,
+
+      // Profile
       firstName: user.profile?.firstName || null,
       lastName: user.profile?.lastName || null,
       phoneNumber: user.profile?.phoneNumber || null,
+      dateOfBirth: user.profile?.dateOfBirth || null,
+      gender: user.profile?.gender || null,
+      country: user.profile?.country || null,
+      state: user.profile?.state || null,
       avatarUrl: user.profile?.avatarUrl || null,
+
+      // KYC
+      kycStatus: {
+        bvnVerified: user.kyc?.bvnVerified || false,
+        idStatus: user.kyc?.idStatus || null,
+        addressStatus: user.kyc?.addressStatus || null,
+      },
+
       createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
     };
   }
 
@@ -69,6 +89,33 @@ export class UserServiceService {
     ]);
 
     return { message: 'Profile updated successfully', nextStep: OnboardingStep.BVN };
+  }
+
+  async updateProfileInfo(data: { userId: string; firstName?: string; lastName?: string; avatarUrl?: string }) {
+    const { userId, firstName, lastName, avatarUrl } = data;
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new RpcException({ message: 'User not found', status: 404 });
+    }
+
+    await this.prisma.profile.upsert({
+      where: { userId },
+      create: {
+        userId,
+        ...(firstName && { firstName }),
+        ...(lastName && { lastName }),
+        ...(avatarUrl && { avatarUrl }),
+      },
+      update: {
+        ...(firstName && { firstName }),
+        ...(lastName && { lastName }),
+        ...(avatarUrl && { avatarUrl }),
+      },
+    });
+
+    return { message: 'Profile info updated successfully' };
   }
 
   async skipStep(userId: string) {

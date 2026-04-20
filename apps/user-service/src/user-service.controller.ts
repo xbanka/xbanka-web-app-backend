@@ -17,6 +17,11 @@ export class UserServiceController {
     return this.userServiceService.updateProfile(data);
   }
 
+  @MessagePattern({ cmd: 'update-profile-info' })
+  async updateProfileInfo(@Payload() data: any) {
+    return this.userServiceService.updateProfileInfo(data);
+  }
+
   @MessagePattern({ cmd: 'skip-step' })
   async skipStep(@Payload() data: { userId: string }) {
     return this.userServiceService.skipStep(data.userId);

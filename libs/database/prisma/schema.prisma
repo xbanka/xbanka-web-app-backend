@@ -619,3 +619,16 @@ model SavedCard {
 
   @@index([userId])
 }
+
+/// Stores real-time market data for cryptocurrencies from a public aggregate feed.
+model CryptoMarketData {
+  id               String   @id @default(uuid())
+  symbol           String   @unique // e.g., BTC, ETH, USDT
+  name             String   // e.g., Bitcoin, Ethereum, Tether
+  priceUsd         Float    // Current price in USD
+  changePercent24h Float    // 24-hour percentage change
+  rank             Int?     // Market cap rank
+  lastUpdated      DateTime @updatedAt
+
+  @@index([symbol])
+}

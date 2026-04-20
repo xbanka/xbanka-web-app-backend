@@ -3,8 +3,24 @@ import { BaseIntegrationService } from '../services/base-integration.service';
 
 @Injectable()
 export class PaystackService extends BaseIntegrationService {
+    
     protected readonly baseUrl = 'https://api.paystack.co';
     protected readonly apiKey = process.env.PAYSTACK_SECRET_KEY || '';
+
+
+    /**
+     * Returns the list of banks supported for Direct Debit in Nigeria.
+     */
+    async getDirectDebitBanks() {
+        try {
+            // Using require to load static JSON data
+            const banks = require('../data/paystack-direct-debit-banks.json');
+            return banks;
+        } catch (error) {
+            this.logger.error(`❌ Failed to load direct debit banks: ${error.message}`);
+            return [];
+        }
+    }
 
     /**
      * Fetches the list of all supported banks from Paystack.
@@ -41,6 +57,11 @@ export class PaystackService extends BaseIntegrationService {
             this.logger.error(`❌ Failed to initialize Paystack transaction: ${error.message}`);
             throw error;
         }
+    }
+
+
+    asgetDirectDebitBanks() {
+      throw new Error('Method not implemented.');
     }
 
     /**
@@ -128,6 +149,6 @@ export class PaystackService extends BaseIntegrationService {
         } catch (error) {
             this.logger.error(`❌ Failed to deactivate Paystack authorization ${authorization_code}: ${error.message}`);
             throw error;
-        }
+    }
     }
 }

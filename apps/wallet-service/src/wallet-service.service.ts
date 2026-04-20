@@ -4,10 +4,13 @@ import { DatabaseService } from '@app/database';
 import { ObiexService, NubanService, NubanApiService, PaystackService } from '@app/common';
 import { WalletType } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { Subject, Observable } from 'rxjs';
+import axios from 'axios';
 
 @Injectable()
 export class WalletServiceService {
   private readonly logger = new Logger(WalletServiceService.name);
+  private readonly marketUpdates$ = new Subject<any>();
 
   constructor(
     private readonly prisma: DatabaseService,
@@ -16,6 +19,77 @@ export class WalletServiceService {
     private readonly nubanApi: NubanApiService,
     private readonly paystack: PaystackService,
   ) { }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async updateMarketPrices() {
+    this.logger.log('📈 Fetching real-time market prices from CoinCap...');
+    try {
+      const baseUrl = process.env.COINCAP_BASE_URL || 'https://api.coincap.io/v2';
+      const apiKey = process.env.COINCAP_API_KEY;
+      
+      const config: any = {
+        params: {
+          limit: 20 // Get top 20 assets
+        }
+      };
+
+      if (apiKey) {
+        config.headers = {
+          'Authorization': `Bearer ${apiKey}`
+        };
+      }
+
+      const response = await axios.get(`${baseUrl}/assets`, config);
+
+      const assets = response.data?.data || [];
+      if (!assets.length) {
+        return { success: false, message: 'No assets found from provider' };
+      }
+
+      const updates = await Promise.all(assets.map(async (asset: any) => {
+        const data = {
+          symbol: asset.symbol,
+          name: asset.name,
+          priceUsd: parseFloat(asset.priceUsd),
+          changePercent24h: parseFloat(asset.changePercent24Hr),
+          rank: parseInt(asset.rank),
+        };
+
+        return (this.prisma as any).cryptoMarketData.upsert({
+          where: { symbol: data.symbol },
+          create: data,
+          update: data,
+        });
+      }));
+
+      this.marketUpdates$.next(updates);
+      const symbols = updates.map((u: any) => u.symbol).join(', ');
+      this.logger.log(`✅ Updated ${updates.length} market prices: [${symbols}]`);
+      
+      return { 
+        success: true, 
+        count: updates.length, 
+        symbols: updates.map((u: any) => u.symbol) 
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to update market prices: ${error.message}`);
+      throw new RpcException(`Failed to sync market prices: ${error.message}`);
+    }
+  }
+
+  getMarketPriceUpdates(): Observable<any> {
+    return this.marketUpdates$.asObservable();
+  }
+
+  async getLatestMarketPrices() {
+    return (this.prisma as any).cryptoMarketData.findMany({
+      orderBy: { rank: 'asc' }
+    });
+  }
+
+  async getDirectDebitBanks() {
+    return this.paystack.getDirectDebitBanks();
+  }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async pollPendingTransactions() {
@@ -589,17 +663,21 @@ export class WalletServiceService {
     const obiexQuote: any = await this.obiex.createQuote(canonicalSource, canonicalTarget, amount, side);
     const data = obiexQuote.data || obiexQuote;
 
-    // 3. Calculate admin fee
-    // Obiex returns amountReceived for the target amount
-    const grossPayout = data.amountReceived || data.payout || data.amount;
+    // 3. Normalize payout and rate based on side
+    // Obiex 'buy' returns amountToReceive (source) in amountReceived and amountToPay (target) in amount.
+    const isBuy = side === 'buy';
+    const grossPayout = isBuy ? data.amount : (data.amountReceived || data.payout || data.amount);
+    const normalizedRate = isBuy ? (data.amount / data.amountReceived) : data.rate;
+
+    // 4. Calculate admin fee
     const fee = await this.calculateAdminFee(source, target, grossPayout || 0);
     const netPayout = (grossPayout || 0) - fee;
 
-    // 4. Robust expiry parsing (Obiex uses expiryDate)
+    // 5. Robust expiry parsing (Obiex uses expiryDate)
     const rawExpiry = data.expiryDate || data.expiresAt || data.expiry || data.expires_at;
     const expiresAt = rawExpiry ? new Date(rawExpiry) : new Date(Date.now() + 5 * 60 * 1000);
 
-    // 5. Store quote internally for logging and to hide Obiex ID
+    // 6. Store quote internally for logging and to hide Obiex ID
     const quote = await this.prisma.conversionQuote.create({
       data: {
         userId,
@@ -607,7 +685,7 @@ export class WalletServiceService {
         sourceCurrency: source,
         targetCurrency: target,
         sourceAmount: amount,
-        rate: data.rate,
+        rate: normalizedRate,
         grossPayout: grossPayout || 0,
         adminFee: fee,
         netPayout,
@@ -622,7 +700,7 @@ export class WalletServiceService {
       sourceCurrency: source,
       targetCurrency: target,
       sourceAmount: amount,
-      rate: data.rate,
+      rate: normalizedRate,
       grossPayout: grossPayout,
       adminFee: fee,
       netPayout: netPayout,
@@ -678,8 +756,12 @@ export class WalletServiceService {
     }
     const quoteData = obiexQuote.data || obiexQuote;
 
-    // 3. Calculate admin fee
-    const grossPayout = quoteData.amountReceived || quoteData.payout || quoteData.amount;
+    // 3. Normalize payout and rate based on side
+    const isBuy = side === 'buy';
+    const grossPayout = isBuy ? quoteData.amount : (quoteData.amountReceived || quoteData.payout || quoteData.amount);
+    const normalizedRate = isBuy ? (quoteData.amount / quoteData.amountReceived) : quoteData.rate;
+
+    // 4. Calculate admin fee
     const fee = await this.calculateAdminFee(data.source, data.target, grossPayout || 0);
     const netPayout = (grossPayout || 0) - fee;
 
@@ -687,11 +769,11 @@ export class WalletServiceService {
       sourceCurrency: data.source,
       targetCurrency: data.target,
       sourceAmount: data.amount,
-      rate: quoteData.rate,
+      rate: normalizedRate,
       grossPayout: grossPayout || 0,
       adminFee: fee,
       netPayout,
-      estimatedPrice: `1 ${data.source} ≈ ${quoteData.rate.toLocaleString()} ${data.target}`,
+      estimatedPrice: `1 ${data.source} ≈ ${normalizedRate.toLocaleString()} ${data.target}`,
     };
   }
 

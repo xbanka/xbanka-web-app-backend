@@ -165,4 +165,24 @@ export class WalletServiceController {
   async handleDeleteSavedCard(@Payload() data: { userId: string; cardId: string }) {
     return this.walletService.deleteSavedCard(data.userId, data.cardId);
   }
+
+  @MessagePattern({ cmd: 'get-market-price-updates' })
+  handleGetMarketPriceUpdates() {
+    return this.walletService.getMarketPriceUpdates();
+  }
+
+  @MessagePattern({ cmd: 'get-latest-market-prices' })
+  async handleGetLatestMarketPrices() {
+    return this.walletService.getLatestMarketPrices();
+  }
+
+  @MessagePattern({ cmd: 'sync-market-prices' })
+  async handleSyncMarketPrices() {
+    return this.walletService.updateMarketPrices();
+  }
+
+  @MessagePattern({ cmd: 'get-direct-debit-banks' })
+  async handleGetDirectDebitBanks() {
+    return this.walletService.getDirectDebitBanks();
+  }
 }

@@ -138,6 +138,22 @@ export class UpdateProfileDto {
     profilePicture?: any;
 }
 
+export class UpdateProfileInfoDto {
+    @ApiProperty({ description: 'User first name', example: 'John', required: false })
+    @IsOptional()
+    @IsString()
+    firstName?: string;
+
+    @ApiProperty({ description: 'User last name', example: 'Doe', required: false })
+    @IsOptional()
+    @IsString()
+    lastName?: string;
+
+    @ApiProperty({ type: 'string', format: 'binary', required: false, description: 'Profile picture to upload' })
+    @IsOptional()
+    avatar?: any;
+}
+
 export class UpdateIdentityDto {
     @ApiProperty({ description: 'The unique ID of the user', example: 'uuid-here' })
     @IsUUID()

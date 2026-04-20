@@ -5,7 +5,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateProfileInfoDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 import { PaystackWebhookGuard } from './guards/paystack-webhook.guard';
 
@@ -30,6 +30,23 @@ export class GatewayController {
 
     return this.notificationClient.send(pattern, payload);
   }
+
+  @ApiTags('market')
+  @ApiOperation({ summary: 'Get latest crypto market prices' })
+  @Get('wallets/market-prices')
+  getMarketPrices() {
+    return this.walletClient.send({ cmd: 'get-latest-market-prices' }, {});
+  }
+
+  @ApiTags('market')
+  @ApiOperation({ summary: 'Stream real-time crypto market data (prices, 24h change)' })
+  @Sse('wallets/market-stream')
+  streamMarketData(): Observable<MessageEvent> {
+    return this.walletClient.send({ cmd: 'get-market-price-updates' }, {}).pipe(
+      map((data) => ({ data } as MessageEvent)),
+    );
+  }
+
 
   @ApiTags('webhooks')
   @ApiOperation({ summary: 'Obiex crypto webhook handler', description: 'Public endpoint for Obiex to send crypto deposit/transaction confirmation webhooks.' })
@@ -165,7 +182,7 @@ export class GatewayController {
   @ApiResponse({ status: 200, description: 'Initialization successful', type: FundingResponseDto })
   @Post('wallets/fiat/fund/initiate')
   async initiateFiatDeposit(@Req() req, @Body() data: InitiateFundingDto) {
-    return this.walletClient.send({ cmd: 'initiate-fiat-deposit' }, { userId: req.user.id, amount: data.amount, saveCard: data.saveCard });
+    return this.walletClient.send({ cmd: 'initiate-fiat-deposit' }, { userId: req.user.id, amount: data.amount, callback_url: data.callback_url, saveCard: data.saveCard });
   }
 
   @ApiTags('wallet')
@@ -418,11 +435,36 @@ export class GatewayController {
   @ApiTags('profile')
   @ApiBearerAuth()
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Get current user profile', description: 'Returns name, email, phone, user ID, account creation date and avatar URL.' })
+  @ApiOperation({ summary: 'Get current user profile', description: 'Returns full user data: email, firstName, lastName, phoneNumber, dateOfBirth, gender, country, state, avatarUrl, referralCode, currentStep, isEmailVerified, isTwoFactorEnabled, hasTransactionPin, KYC status (bvnVerified, idStatus, addressStatus), createdAt, updatedAt.' })
   @ApiResponse({ status: 200, description: 'Profile details returned successfully' })
   @Get('users/profile')
   getProfile(@Req() req) {
     return this.userClient.send({ cmd: 'get-profile' }, { userId: req.user.id });
+  }
+
+  @ApiTags('profile')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Update profile name and/or avatar',
+    description: 'Lightweight PATCH endpoint to update firstName, lastName, and/or profile picture. Does not affect onboarding step.'
+  })
+  @ApiResponse({ status: 200, description: 'Profile info updated successfully' })
+  @UseInterceptors(FileInterceptor('avatar'))
+  @Post('users/profile/info')
+  async updateProfileInfo(
+    @Req() req,
+    @Body() data: UpdateProfileInfoDto,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    let avatarUrl: string | undefined;
+    if (file) {
+      avatarUrl = await this.s3Service.uploadFile(file, 'profile');
+    }
+    return this.userClient.send(
+      { cmd: 'update-profile-info' },
+      { userId: req.user.id, ...data, avatarUrl }
+    );
   }
 
   @ApiTags('profile')
@@ -616,7 +658,7 @@ export class GatewayController {
   @UseGuards(AuthGuard('jwt'))
   @Get('security/sessions')
   getSessions(@Req() req: any) {
-    return this.authClient.send({ cmd: 'get-sessions' }, req.user.userId);
+    return this.authClient.send({ cmd: 'get-sessions' }, { userId: req.user.id });
   }
 
   @ApiTags('security')
@@ -624,7 +666,7 @@ export class GatewayController {
   @UseGuards(AuthGuard('jwt'))
   @Post('security/sessions/revoke')
   revokeSession(@Body() data: { sessionId: string }, @Req() req: any) {
-    return this.authClient.send({ cmd: 'revoke-session' }, { sessionId: data.sessionId, userId: req.user.userId });
+    return this.authClient.send({ cmd: 'revoke-session' }, { sessionId: data.sessionId, userId: req.user.id });
   }
 
   @ApiTags('security')
@@ -632,7 +674,7 @@ export class GatewayController {
   @UseGuards(AuthGuard('jwt'))
   @Get('security/devices')
   getDevices(@Req() req: any) {
-    return this.authClient.send({ cmd: 'get-devices' }, req.user.userId);
+    return this.authClient.send({ cmd: 'get-devices' }, { userId: req.user.id });
   }
 
   @ApiTags('security')
@@ -640,7 +682,7 @@ export class GatewayController {
   @UseGuards(AuthGuard('jwt'))
   @Post('security/devices/remove')
   removeDevice(@Body() data: { deviceId: string }, @Req() req: any) {
-    return this.authClient.send({ cmd: 'remove-device' }, { deviceId: data.deviceId, userId: req.user.userId });
+    return this.authClient.send({ cmd: 'remove-device' }, { deviceId: data.deviceId, userId: req.user.id });
   }
 
   // --- New Security & 2FA Endpoints ---

@@ -27,7 +27,7 @@ export class AuthServiceController {
   }
 
   @MessagePattern({ cmd: 'resend-verification' })
-  resendVerification(data: { email: string; redirectUrl: string }) {
+  resendVerification(@Payload() data: { email: string; redirectUrl: string }) {
     return this.authServiceService.resendVerification(data);
   }
 
@@ -37,8 +37,8 @@ export class AuthServiceController {
   }
 
   @MessagePattern({ cmd: 'get-sessions' })
-  getSessions(@Payload() userId: string) {
-    return this.authServiceService.getSessions(userId);
+  getSessions(@Payload() data: { userId: string }) {
+    return this.authServiceService.getSessions(data.userId);
   }
 
   @MessagePattern({ cmd: 'revoke-session' })
@@ -47,8 +47,8 @@ export class AuthServiceController {
   }
 
   @MessagePattern({ cmd: 'get-devices' })
-  getDevices(@Payload() userId: string) {
-    return this.authServiceService.getDevices(userId);
+  getDevices(@Payload() data: { userId: string }) {
+    return this.authServiceService.getDevices(data.userId);
   }
 
   @MessagePattern({ cmd: 'remove-device' })

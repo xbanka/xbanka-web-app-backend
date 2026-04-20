@@ -32,10 +32,6 @@ export class InternalController {
     });
   }
 
-  @ApiOperation({ 
-    summary: 'Get available currencies', 
-    description: 'Requires x-internal-key header. Fetches list of all tradeable currencies.' 
-  })
   @ApiHeader({
     name: 'x-internal-key',
     description: 'Internal API Key for authentication',
@@ -45,5 +41,20 @@ export class InternalController {
   @Get('wallet/currencies')
   async getCurrencies() {
     return this.walletClient.send({ cmd: 'get-currencies' }, {});
+  }
+
+  @ApiOperation({ 
+    summary: 'Manual market price sync', 
+    description: 'Requires x-internal-key header. Triggers an immediate fetch and update of crypto market prices from CoinCap.' 
+  })
+  @ApiHeader({
+    name: 'x-internal-key',
+    description: 'Internal API Key for authentication',
+    required: true,
+  })
+  @ApiResponse({ status: 200, description: 'Sync initiated' })
+  @Post('wallet/sync-market-prices')
+  async syncMarketPrices() {
+    return this.walletClient.send({ cmd: 'sync-market-prices' }, {});
   }
 }
