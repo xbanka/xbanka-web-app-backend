@@ -39,6 +39,13 @@ export class GatewayController {
   }
 
   @ApiTags('market')
+  @ApiOperation({ summary: 'Get direct debit banks' })
+  @Get('wallets/direct-debit-banks')
+  getDirectDebitBanks() {
+    return this.walletClient.send({ cmd: 'get-direct-debit-banks' }, {});
+  }
+
+  @ApiTags('market')
   @ApiOperation({ summary: 'Stream real-time crypto market data (prices, 24h change)' })
   @Sse('wallets/market-stream')
   streamMarketData(): Observable<MessageEvent> {
