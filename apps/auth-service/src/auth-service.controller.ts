@@ -105,4 +105,9 @@ export class AuthServiceController {
   async verify2faLogin(@Payload() data: any) {
     return this.authServiceService.verify2faLogin(data);
   }
+
+  @MessagePattern({ cmd: 'refresh-token' })
+  async refreshToken(@Payload() data: { refresh_token: string }) {
+    return this.authServiceService.refreshToken(data);
+  }
 }

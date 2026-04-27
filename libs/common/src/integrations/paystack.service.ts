@@ -38,11 +38,11 @@ export class PaystackService extends BaseIntegrationService {
 
     /**
      * Initializes a transaction with Paystack.
-     * @param data { email, amount, reference, metadata }
+     * @param data { email, amount, reference, metadata, channels, callback_url }
      * Note: Amount should be in the base currency unit (e.g., Naira, not kobo). This method handles kobo conversion.
      */
-    async initializeTransaction(data: { email: string; amount: number; reference: string; metadata?: any; callback_url?: string }) {
-        this.logger.log(`🔄 Initializing Paystack transaction: ref=${data.reference}, amount=${data.amount} NGN`);
+    async initializeTransaction(data: { email: string; amount: number; reference: string; metadata?: any; channels?: string[]; callback_url?: string }) {
+        this.logger.log(`🔄 Initializing Paystack transaction: ref=${data.reference}, amount=${data.amount} NGN, channels=${data.channels || 'all'}`);
         try {
             const koboAmount = Math.round(data.amount * 100);
             const response = await this.post<any>('/transaction/initialize', {
@@ -50,6 +50,7 @@ export class PaystackService extends BaseIntegrationService {
                 amount: koboAmount,
                 reference: data.reference,
                 metadata: data.metadata,
+                channels: data.channels,
                 callback_url: data.callback_url,
             });
             return response;
@@ -60,9 +61,6 @@ export class PaystackService extends BaseIntegrationService {
     }
 
 
-    asgetDirectDebitBanks() {
-      throw new Error('Method not implemented.');
-    }
 
     /**
      * Verifies a transaction status with Paystack.
@@ -81,12 +79,14 @@ export class PaystackService extends BaseIntegrationService {
     /**
      * Initializes a Direct Debit authorization request.
      */
-    async initializeDirectDebitAuthorization(data: { email: string; callback_url?: string; account?: any; address?: any; reference?: string }) {
+    async initializeDirectDebitAuthorization(data: { email: string; amount?: number; callback_url?: string; account?: any; address?: any; reference?: string }) {
         this.logger.log(`🔄 Initializing Paystack direct debit authorization for email=${data.email}`);
         try {
+            const koboAmount = data.amount ? Math.round(data.amount * 100) : undefined;
             const response = await this.post<any>('/customer/authorization/initialize', {
                 email: data.email,
-                channel: 'direct_debit',
+                amount: koboAmount,
+                channels: ['direct_debit'],
                 callback_url: data.callback_url || process.env.PAYSTACK_CALLBACK_URL,
                 account: data.account,
                 address: data.address,

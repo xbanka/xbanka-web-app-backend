@@ -1,11 +1,12 @@
 import { Controller, Get, Post, Body, Inject, Req, Res, UseGuards, Query, Sse, MessageEvent, UseInterceptors, UploadedFile, Param, BadRequestException, Headers, Delete } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { Observable, map, firstValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateProfileInfoDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateProfileInfoDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto, TokenizeCardDto, RefreshTokenDto, RefreshTokenResponseDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 import { PaystackWebhookGuard } from './guards/paystack-webhook.guard';
 
@@ -33,9 +34,14 @@ export class GatewayController {
 
   @ApiTags('market')
   @ApiOperation({ summary: 'Get latest crypto market prices' })
+  @ApiResponse({ status: 200, description: 'Paginated market prices', type: PaginatedResponseDto })
+  @ApiQuery({ type: PaginationQueryDto })
   @Get('wallets/market-prices')
-  getMarketPrices() {
-    return this.walletClient.send({ cmd: 'get-latest-market-prices' }, {});
+  getMarketPrices(@Query() pagination: PaginationQueryDto) {
+    return this.walletClient.send({ cmd: 'get-latest-market-prices' }, {
+      page: parseInt(pagination.page || '1'),
+      limit: parseInt(pagination.limit || '10'),
+    });
   }
 
   @ApiTags('market')
@@ -232,6 +238,16 @@ export class GatewayController {
     return this.walletClient.send({ cmd: 'delete-saved-card' }, { userId: req.user.id, cardId });
   }
 
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Tokenize a card', description: 'Initiates a 50 NGN transaction to tokenize and save a card for future use. Restricts payment channel to CARD only.' })
+  @ApiResponse({ status: 200, description: 'Initialization successful', type: FundingResponseDto })
+  @Post('wallets/fiat/cards/tokenize')
+  async tokenizeCard(@Req() req, @Body() data: TokenizeCardDto) {
+    return this.walletClient.send({ cmd: 'tokenize-card' }, { userId: req.user.id, ...data });
+  }
+
 
   @ApiTags('wallet')
   @ApiOperation({ summary: 'Paystack Webhook', description: 'Global webhook for Paystack payment notifications.' })
@@ -382,7 +398,7 @@ export class GatewayController {
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful or device verification required', type: LoginResponseDto })
   @Post('auth/login')
-  async login(@Body() data: LoginDto, @Req() req: any) {
+  async login(@Body() data: LoginDto, @Req() req: any, @Res() res: Response) {
     const metadata = {
       deviceId: req.headers['x-device-id'],
       deviceName: req.headers['x-device-name'],
@@ -390,7 +406,20 @@ export class GatewayController {
       ipAddress: req.ip || req.connection.remoteAddress,
       userAgent: req.headers['user-agent'],
     };
-    return this.authClient.send({ cmd: 'login' }, { ...data, metadata });
+    const result = await firstValueFrom(this.authClient.send({ cmd: 'login' }, { ...data, metadata }));
+    
+    if (result.refresh_token) {
+      res.cookie('refresh_token', result.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+      delete result.refresh_token;
+    }
+    
+    return res.status(200).json(result);
   }
 
   @ApiTags('auth')
@@ -423,8 +452,19 @@ export class GatewayController {
   @ApiResponse({ status: 302, description: 'Redirects to frontend with access_token in query params' })
   @Get('auth/google/callback')
   @UseGuards(GoogleAuthGuard)
-  async googleAuthCallback(@Req() req: any, @Res() res: any) {
-    const result = await this.authClient.send({ cmd: 'google-login' }, req.user).toPromise();
+  async googleAuthCallback(@Req() req: any, @Res() res: Response) {
+    const result = await firstValueFrom(this.authClient.send({ cmd: 'google-login' }, req.user));
+    
+    if (result.refresh_token) {
+      res.cookie('refresh_token', result.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+    }
+
     // Retrieve the original redirect url from the state query parameter
     const redirectUrlStr = req.query.state || (process.env.FRONTEND_URL || 'http://localhost:3001') + '/auth/callback';
 
@@ -808,12 +848,57 @@ export class GatewayController {
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid 2FA token' })
   @Post('auth/2fa/login')
-  verify2faLogin(@Body() data: Verify2faDto & { userId: string }, @Req() req) {
+  async verify2faLogin(@Body() data: Verify2faDto & { userId: string }, @Req() req, @Res() res: Response) {
     const metadata = {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       deviceId: req.headers['x-device-id'],
     };
-    return this.authClient.send({ cmd: 'verify-2fa-login' }, { ...data, metadata });
+    const result = await firstValueFrom(this.authClient.send({ cmd: 'verify-2fa-login' }, { ...data, metadata }));
+    
+    if (result.refresh_token) {
+      res.cookie('refresh_token', result.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+      delete result.refresh_token;
+    }
+    
+    return res.status(200).json(result);
+  }
+
+  @ApiTags('auth')
+  @ApiOperation({
+    summary: 'Refresh access token',
+    description: 'Exchanges a valid refresh token for a new access token and a rotated refresh token. The old refresh token is invalidated after use (token rotation).'
+  })
+  @ApiBody({ type: RefreshTokenDto })
+  @ApiResponse({ status: 200, description: 'Tokens refreshed successfully', type: RefreshTokenResponseDto })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  @Post('auth/refresh')
+  async refreshToken(@Req() req: any, @Res() res: Response) {
+    const refreshToken = req.cookies?.refresh_token;
+    
+    if (!refreshToken) {
+      throw new BadRequestException('Refresh token missing');
+    }
+    
+    const result = await firstValueFrom(this.authClient.send({ cmd: 'refresh-token' }, { refresh_token: refreshToken }));
+    
+    if (result.refresh_token) {
+      res.cookie('refresh_token', result.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      });
+      delete result.refresh_token;
+    }
+    
+    return res.status(200).json(result);
   }
 }

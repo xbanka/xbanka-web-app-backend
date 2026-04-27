@@ -166,14 +166,19 @@ export class WalletServiceController {
     return this.walletService.deleteSavedCard(data.userId, data.cardId);
   }
 
+  @MessagePattern({ cmd: 'tokenize-card' })
+  async handleTokenizeCard(@Payload() data: { userId: string; callback_url?: string }) {
+    return this.walletService.tokenizeCard(data.userId, data.callback_url);
+  }
+
   @MessagePattern({ cmd: 'get-market-price-updates' })
   handleGetMarketPriceUpdates() {
     return this.walletService.getMarketPriceUpdates();
   }
 
   @MessagePattern({ cmd: 'get-latest-market-prices' })
-  async handleGetLatestMarketPrices() {
-    return this.walletService.getLatestMarketPrices();
+  async handleGetLatestMarketPrices(@Payload() data: { page?: number; limit?: number }) {
+    return this.walletService.getLatestMarketPrices(data.page, data.limit);
   }
 
   @MessagePattern({ cmd: 'sync-market-prices' })

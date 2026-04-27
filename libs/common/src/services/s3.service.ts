@@ -1,11 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+    S3Client,
+    PutBucketPolicyCommand,
+    PutPublicAccessBlockCommand,
+} from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 
 @Injectable()
-export class S3Service {
+export class S3Service implements OnModuleInit {
     private readonly s3Client: S3Client;
     private readonly logger = new Logger(S3Service.name);
     private readonly bucketName: string;
@@ -16,7 +20,9 @@ export class S3Service {
         const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.AWS_S3_SECRET_ACCESS_KEY;
         this.bucketName = process.env.AWS_S3_BUCKET_NAME!;
 
-        const maskedAccessKey = accessKeyId ? `${accessKeyId.substring(0, 4)}...${accessKeyId.substring(accessKeyId.length - 4)}` : 'undefined';
+        const maskedAccessKey = accessKeyId
+            ? `${accessKeyId.substring(0, 4)}...${accessKeyId.substring(accessKeyId.length - 4)}`
+            : 'undefined';
         this.logger.log(`Initializing S3: Region=${region}, Bucket=${this.bucketName}, AccessKey=${maskedAccessKey}`);
 
         this.s3Client = new S3Client({
@@ -26,6 +32,54 @@ export class S3Service {
                 secretAccessKey: secretAccessKey!,
             },
         });
+    }
+
+    /**
+     * On startup, ensure the bucket is configured for public reads:
+     * 1. Disable Block Public Access
+     * 2. Apply a bucket policy that allows s3:GetObject for everyone
+     */
+    async onModuleInit() {
+        try {
+            // Step 1: Disable all Block Public Access settings
+            await this.s3Client.send(
+                new PutPublicAccessBlockCommand({
+                    Bucket: this.bucketName,
+                    PublicAccessBlockConfiguration: {
+                        BlockPublicAcls: false,
+                        IgnorePublicAcls: false,
+                        BlockPublicPolicy: false,
+                        RestrictPublicBuckets: false,
+                    },
+                }),
+            );
+            this.logger.log(`[S3] Block Public Access disabled for bucket: ${this.bucketName}`);
+
+            // Step 2: Apply public-read bucket policy
+            const bucketPolicy = JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                    {
+                        Sid: 'PublicReadGetObject',
+                        Effect: 'Allow',
+                        Principal: '*',
+                        Action: 's3:GetObject',
+                        Resource: `arn:aws:s3:::${this.bucketName}/*`,
+                    },
+                ],
+            });
+
+            await this.s3Client.send(
+                new PutBucketPolicyCommand({
+                    Bucket: this.bucketName,
+                    Policy: bucketPolicy,
+                }),
+            );
+            this.logger.log(`[S3] Public-read bucket policy applied to: ${this.bucketName}`);
+        } catch (error) {
+            this.logger.error(`[S3] Failed to configure public access: ${error.message}`);
+            // Non-fatal — service still works; uploads will just remain private
+        }
     }
 
     async uploadFile(file: Express.Multer.File, folder: string = 'kyc'): Promise<string> {
@@ -40,6 +94,7 @@ export class S3Service {
                     Key: fileName,
                     Body: file.buffer,
                     ContentType: file.mimetype,
+                    ACL: 'public-read',
                 },
             });
 

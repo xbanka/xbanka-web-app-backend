@@ -81,10 +81,31 @@ export class WalletServiceService {
     return this.marketUpdates$.asObservable();
   }
 
-  async getLatestMarketPrices() {
-    return (this.prisma as any).cryptoMarketData.findMany({
-      orderBy: { rank: 'asc' }
-    });
+  async getLatestMarketPrices(page: number = 1, limit: number = 10) {
+    this.logger.log(`📈 Fetching latest market prices (page: ${page}, limit: ${limit})`);
+    const skip = (page - 1) * limit;
+
+    const [items, totalItems] = await Promise.all([
+      (this.prisma as any).cryptoMarketData.findMany({
+        skip,
+        take: limit,
+        orderBy: { rank: 'asc' },
+      }),
+      (this.prisma as any).cryptoMarketData.count(),
+    ]);
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      items,
+      meta: {
+        totalItems,
+        itemCount: items.length,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+      },
+    };
   }
 
   async getDirectDebitBanks() {
@@ -1013,49 +1034,124 @@ export class WalletServiceService {
     };
   }
 
+  async tokenizeCard(userId: string, callback_url?: string) {
+    this.logger.log(`💳 Initiating card tokenization for user ${userId}`);
+
+    const amount = 50; // Fixed verification amount
+
+    // 1. Ensure NGN wallet exists
+    await this.prisma.wallet.upsert({
+      where: { userId_currency: { userId, currency: 'NGN' } },
+      create: { userId, currency: 'NGN', type: 'FIAT', balance: 0 },
+      update: {},
+    });
+
+    // 2. Create pending transaction
+    const transaction = await this.prisma.transaction.create({
+      data: {
+        userId,
+        type: 'DEPOSIT',
+        status: 'PENDING',
+        amount,
+        currency: 'NGN',
+        reference: `TOK-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        note: `Card tokenization verification`,
+      },
+    });
+
+    // 3. Initialize Paystack with forced CARD channel
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const paystackResponse = await this.paystack.initializeTransaction({
+      email: user.email,
+      amount,
+      reference: transaction.reference,
+      channels: ['card'],
+      metadata: { userId, transactionId: transaction.id, saveCard: true },
+      callback_url,
+    });
+
+    return {
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      ...paystackResponse.data,
+    };
+  }
+
   async verifyFiatDeposit(reference: string) {
-    this.logger.log(`🔍 Verifying fiat deposit: ${reference}`);
+    this.logger.log(`🔍 [Verify] Starting verification for reference: ${reference}`);
 
     // 1. Fetch transaction
     const transaction = await this.prisma.transaction.findUnique({
       where: { reference },
     });
 
-    if (!transaction || transaction.type !== 'DEPOSIT') {
-      throw new RpcException({ message: 'Transaction not found or invalid type', status: 404 });
+    if (!transaction) {
+      this.logger.warn(`❌ [Verify] Transaction not found for reference: ${reference}`);
+      throw new RpcException({ message: 'Transaction not found', status: 404 });
+    }
+
+    this.logger.log(`📄 [Verify] Found transaction: ID=${transaction.id}, Type=${transaction.type}, Status=${transaction.status}`);
+
+    if (transaction.type !== 'DEPOSIT') {
+      this.logger.warn(`⚠️ [Verify] Invalid transaction type: ${transaction.type}. Expected DEPOSIT.`);
+      throw new RpcException({ message: 'Invalid transaction type', status: 400 });
     }
 
     if (transaction.status === 'COMPLETED') {
+      this.logger.log(`⏭️ [Verify] Transaction ${reference} is already COMPLETED. Skipping.`);
       return { status: 'SUCCESS', message: 'Transaction already completed', transaction };
     }
 
     // 2. Verify with Paystack
+    this.logger.log(`📡 [Verify] Calling Paystack API to verify reference: ${reference}`);
     const paystackResponse = await this.paystack.verifyTransaction(reference);
     const data = paystackResponse.data;
 
+    if (!data) {
+      this.logger.error(`❌ [Verify] Paystack returned no data for reference: ${reference}`);
+      throw new RpcException({ message: 'Verification failed: No data from provider', status: 500 });
+    }
+
+    this.logger.log(`📊 [Verify] Paystack Status: ${data.status}, Amount: ${data.amount} ${data.currency}`);
+
     if (data.status === 'success') {
       const amount = data.amount / 100; // Paystack returns in kobo
+      this.logger.log(`💰 [Verify] Converting kobo to base units: ${data.amount} -> ${amount} ${transaction.currency}`);
 
       // 3. Atomic update
+      this.logger.log(`💾 [Verify] Starting database transaction to credit wallet and update status...`);
       return this.prisma.$transaction(async (tx) => {
         const wallet = await tx.wallet.findUnique({
           where: { userId_currency: { userId: transaction.userId, currency: transaction.currency } },
         });
 
-        if (!wallet) throw new RpcException({ message: 'Wallet not found', status: 404 });
+        if (!wallet) {
+          this.logger.error(`❌ [Verify] Wallet not found for user ${transaction.userId} and currency ${transaction.currency}`);
+          throw new RpcException({ message: 'Wallet not found', status: 404 });
+        }
 
+        this.logger.log(`💳 [Verify] Crediting wallet ${wallet.id}: Balance ${wallet.balance} -> ${wallet.balance + amount}`);
         await tx.wallet.update({
           where: { id: wallet.id },
           data: { balance: { increment: amount } },
         });
 
+        this.logger.log(`📝 [Verify] Updating transaction ${transaction.id} status to COMPLETED`);
         const updatedTx = await tx.transaction.update({
           where: { id: transaction.id },
           data: { status: 'COMPLETED', amount },
         });
 
         // Save card if requested and reusable
-        if (data.metadata?.saveCard === true && data.authorization?.reusable === true) {
+        const saveCardRequested = data.metadata?.saveCard === true;
+        const cardIsReusable = data.authorization?.reusable === true;
+        
+        this.logger.log(`🤔 [Verify] Card Saving Check: Requested=${saveCardRequested}, Reusable=${cardIsReusable}`);
+
+        if (saveCardRequested && cardIsReusable) {
+          this.logger.log(`✨ [Verify] Tokenizing and saving card for user ${transaction.userId}`);
           await tx.savedCard.create({
             data: {
               userId: transaction.userId,
@@ -1070,18 +1166,21 @@ export class WalletServiceService {
               reusable: true,
             },
           });
-          this.logger.log(`💳 Saved card for user ${transaction.userId}: ${data.authorization.last4}`);
+          this.logger.log(`✅ [Verify] Card successfully saved: ${data.authorization.brand} **** ${data.authorization.last4}`);
+        } else if (saveCardRequested && !cardIsReusable) {
+          this.logger.warn(`⚠️ [Verify] Card save requested but card is NOT reusable according to Paystack.`);
         }
 
-        this.logger.log(`✅ Fiat deposit successful: ${reference}. Credited ${amount} ${transaction.currency}`);
+        this.logger.log(`🎉 [Verify] Verification process completed successfully for ${reference}`);
         return { status: 'SUCCESS', transaction: updatedTx };
       });
     }
 
+    this.logger.warn(`❌ [Verify] Paystack verification failed: Status is ${data.status}`);
     return { status: data.status, message: 'Transaction not successful on Paystack' };
   }
 
-  async initiateDirectDebit(userId: string, callback_url?: string, accountNumber?: string, bankCode?: string) {
+  async initiateDirectDebit(userId: string, callback_url?: string, accountNumber?: string, bankCode?: string, amount?: number) {
     this.logger.log(`🔄 Initiating direct debit for user ${userId}`);
 
     // Validate bank code if provided for direct debit
@@ -1118,6 +1217,7 @@ export class WalletServiceService {
       email: user.email,
       callback_url,
       reference,
+      amount,
     };
 
     if (accountNumber && bankCode) {

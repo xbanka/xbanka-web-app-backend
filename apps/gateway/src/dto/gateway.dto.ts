@@ -795,6 +795,11 @@ export class DirectDebitInitiateDto {
     @IsOptional()
     @IsString()
     bankCode?: string;
+
+    @ApiProperty({ description: 'The initial amount to charge to verify the mandate (minimum 50 NGN)', example: 50 })
+    @IsNumber()
+    @Min(50)
+    amount: number;
 }
 
 export class DirectDebitChargeDto {
@@ -809,9 +814,37 @@ export class DirectDebitChargeDto {
     amount: number;
 }
 
+export class TokenizeCardDto {
+    @ApiProperty({ description: 'Frontend URL to redirect to after successful card tokenization', example: 'https://app.xbankang.com/cards', required: false })
+    @IsOptional()
+    @IsString()
+    callback_url?: string;
+}
+
 export class DirectDebitDeactivateDto {
     @ApiProperty({ description: 'The mandate ID you want to deactivate', example: 'mandate-uuid-abc' })
     @IsString()
     @IsNotEmpty()
     mandateId: string;
+}
+
+export class RefreshTokenDto {
+    @ApiProperty({
+        description: 'The refresh token received from login or a previous refresh call',
+        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    })
+    @IsString()
+    @IsNotEmpty()
+    refresh_token: string;
+}
+
+export class RefreshTokenResponseDto {
+    @ApiProperty({ description: 'New short-lived JWT access token' })
+    access_token: string;
+
+    @ApiProperty({ description: 'New long-lived JWT refresh token (rotate on every call)' })
+    refresh_token: string;
+
+    @ApiProperty({ description: 'The user object' })
+    user: any;
 }

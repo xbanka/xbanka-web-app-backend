@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { RpcException, ClientProxy } from '@nestjs/microservices';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '@app/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
@@ -11,6 +12,7 @@ export class AuthServiceService {
   constructor(
     private readonly prisma: DatabaseService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
     @Inject('NOTIFICATION_SERVICE') private readonly notificationClient: ClientProxy,
   ) { }
 
@@ -225,8 +227,14 @@ export class AuthServiceService {
     const payload = { sub: user.id, email: user.email, sid: session.id };
     const { password: _, ...userWithoutPassword } = user;
 
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-super-secret-change-me';
+
     return {
       access_token: await this.jwtService.signAsync(payload),
+      refresh_token: await this.jwtService.signAsync(payload, {
+        secret: refreshSecret,
+        expiresIn: '7d',
+      }),
       user: userWithoutPassword,
       session: {
         id: session.id,
@@ -293,9 +301,14 @@ export class AuthServiceService {
 
     const payload = { sub: user.id, email: user.email };
     const { password: _, ...userWithoutPassword } = user;
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-super-secret-change-me';
 
     return {
       access_token: await this.jwtService.signAsync(payload),
+      refresh_token: await this.jwtService.signAsync(payload, {
+        secret: refreshSecret,
+        expiresIn: '7d',
+      }),
       user: userWithoutPassword,
     };
   }
@@ -612,15 +625,70 @@ export class AuthServiceService {
 
     const payload = { sub: user.id, email: user.email, sid: session.id };
     const { password: _, ...userWithoutPassword } = user;
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-super-secret-change-me';
 
     return {
       access_token: await this.jwtService.signAsync(payload),
+      refresh_token: await this.jwtService.signAsync(payload, {
+        secret: refreshSecret,
+        expiresIn: '7d',
+      }),
       user: userWithoutPassword,
       session: {
         id: session.id,
         deviceName: device.name,
         lastActiveAt: session.lastActiveAt,
       },
+    };
+  }
+
+  async refreshToken(data: { refresh_token: string }) {
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-super-secret-change-me';
+
+    let decoded: any;
+    try {
+      decoded = await this.jwtService.verifyAsync(data.refresh_token, { secret: refreshSecret });
+    } catch {
+      throw new RpcException({ message: 'Invalid or expired refresh token', status: 401 });
+    }
+
+    const userId: string = decoded.sub;
+    const sessionId: string | undefined = decoded.sid;
+
+    // If token carries a session ID, verify the session is still active
+    if (sessionId) {
+      const session = await this.prisma.session.findFirst({
+        where: { id: sessionId, userId, isRevoked: false },
+      });
+
+      if (!session) {
+        throw new RpcException({ message: 'Session has been revoked or expired', status: 401 });
+      }
+
+      if (session.expiresAt && session.expiresAt < new Date()) {
+        throw new RpcException({ message: 'Session expired', status: 401 });
+      }
+
+      // Bump lastActiveAt
+      await this.prisma.session.update({
+        where: { id: sessionId },
+        data: { lastActiveAt: new Date() },
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new RpcException({ message: 'User not found', status: 404 });
+
+    const payload = { sub: user.id, email: user.email, ...(sessionId ? { sid: sessionId } : {}) };
+    const { password: _, ...userWithoutPassword } = user;
+
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+      refresh_token: await this.jwtService.signAsync(payload, {
+        secret: refreshSecret,
+        expiresIn: '7d',
+      }),
+      user: userWithoutPassword,
     };
   }
 
