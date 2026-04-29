@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { WalletServiceService } from './wallet-service.service';
 
 @Controller()
@@ -31,7 +31,7 @@ export class WalletServiceController {
     return this.walletService.getFiatWallets(data.userId);
   }
 
-  @MessagePattern({ cmd: 'log-webhook' })
+  @EventPattern('log-webhook')
   async handleLogWebhook(@Payload() data: any) {
     return this.walletService.logWebhook(data);
   }
@@ -97,8 +97,8 @@ export class WalletServiceController {
   }
 
   @MessagePattern({ cmd: 'handle-crypto-webhook' })
-  async handleCryptoWebhook(@Payload() data: { payload: any; signature: string }) {
-    return this.walletService.handleCryptoWebhook(data.payload, data.signature);
+  async handleCryptoWebhook(@Payload() data: { payload: any; signature: string; rawBody?: string }) {
+    return this.walletService.handleCryptoWebhook(data);
   }
 
   @MessagePattern({ cmd: 'handle-fiat-webhook' })

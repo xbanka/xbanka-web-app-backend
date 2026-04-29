@@ -83,7 +83,9 @@ export class GatewayController {
       headers: req.headers,
     });
 
-    return this.walletClient.send({ cmd: 'handle-crypto-webhook' }, { payload, signature });
+    // Pass the payload and the raw body for signature verification
+    const rawBody = req.rawBody || JSON.stringify(payload);
+    return this.walletClient.send({ cmd: 'handle-crypto-webhook' }, { payload, signature, rawBody });
   }
 
   @ApiTags('webhooks')

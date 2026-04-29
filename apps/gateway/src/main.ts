@@ -10,6 +10,12 @@ async function bootstrap() {
   const app = await NestFactory.create(GatewayModule);
 
   app.use(cookieParser());
+  app.use(require('express').json({
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf.toString();
+    },
+    limit: '10mb'
+  }));
 
   // Enable CORS
   app.enableCors({

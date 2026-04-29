@@ -152,73 +152,72 @@ export class AuthServiceService {
       });
     }
 
-    // if (!deviceId) {
-    //   throw new RpcException({
-    //     message: 'Device ID is required for security verification',
-    //     status: 400,
-    //   });
-    // }
+    if (!deviceId) {
+      throw new RpcException({
+        message: 'Device ID is required for security verification',
+        status: 400,
+      });
+    }
 
     // --- Device & Session Logic ---
-    // let device = await this.prisma.device.findUnique({
-    //   where: { userId_deviceId: { userId: user.id, deviceId: deviceId } },
-    // });
+    let device = await this.prisma.device.findUnique({
+      where: { userId_deviceId: { userId: user.id, deviceId: deviceId } },
+    });
 
-    // if (!device) {
-    //   device = await this.prisma.device.create({
-    //     data: {
-    //       userId: user.id,
-    //       deviceId: deviceId || 'unknown',
-    //       name: deviceName || 'Unknown Device',
-    //       type: deviceType || 'WEB',
-    //       isTrusted: false, // Must verify via OTP
-    //     },
-    //   });
-    // }
+    if (!device) {
+      device = await this.prisma.device.create({
+        data: {
+          userId: user.id,
+          deviceId: deviceId || 'unknown',
+          name: deviceName || 'Unknown Device',
+          type: deviceType || 'WEB',
+          isTrusted: false, // Must verify via OTP
+        },
+      });
+    }
 
-    // if (!device.isTrusted) {
-    //   // Generate OTP
-    //   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    //   const expiresAt = new Date();
-    //   expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+    if (!device.isTrusted) {
+      // Generate OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 10);
 
-    //   await this.prisma.device.update({
-    //     where: { id: device.id },
-    //     data: {
-    //       verificationToken: otp,
-    //       verificationTokenExpiresAt: expiresAt,
-    //     },
-    //   });
+      await this.prisma.device.update({
+        where: { id: device.id },
+        data: {
+          verificationToken: otp,
+          verificationTokenExpiresAt: expiresAt,
+        },
+      });
 
-    //   // Send OTP Email
-    //   this.notificationClient.emit('send_email', {
-    //     to: user.email,
-    //     subject: 'XBanka - New Device Login OTP',
-    //     body: `<p>Your verification code for the new device <b>${device.name}</b> is: <h2>${otp}</h2></p>`,
-    //   });
+      // Send OTP Email
+      this.notificationClient.emit('send_email', {
+        to: user.email,
+        subject: 'XBanka - New Device Login OTP',
+        body: `<p>Your verification code for the new device <b>${device.name}</b> is: <h2>${otp}</h2></p>`,
+      });
 
-    //   return {
-    //     status: 'DEVICE_VERIFICATION_REQUIRED',
-    //     userId: user.id,
-    //     deviceId: device.deviceId,
-    //     message: 'Verification code sent to email',
-    //   };
-    // }
+      return {
+        status: 'DEVICE_VERIFICATION_REQUIRED',
+        userId: user.id,
+        deviceId: device.deviceId,
+        message: 'Verification code sent to email',
+      };
+    }
 
-    // if (user.isTwoFactorEnabled) {
-    //   return {
-    //     status: '2FA_REQUIRED',
-    //     userId: user.id,
-    //     message: 'Authenticator code required',
-    //   };
-    // }
+    if (user.isTwoFactorEnabled) {
+      return {
+        status: '2FA_REQUIRED',
+        userId: user.id,
+        message: 'Authenticator code required',
+      };
+    }
 
     // Create Session
     const session = await this.prisma.session.create({
       data: {
         userId: user.id,
-        deviceId: deviceId || 'unknown',
-        // deviceId: device.id,
+        deviceId: device.id,
         ipAddress,
         userAgent,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
@@ -239,8 +238,7 @@ export class AuthServiceService {
       user: userWithoutPassword,
       session: {
         id: session.id,
-        deviceName: deviceName || 'Unknown Device',
-        // deviceName: device.name,
+        deviceName: device.name,
         lastActiveAt: session.lastActiveAt,
       },
     };
