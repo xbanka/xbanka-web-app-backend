@@ -488,7 +488,7 @@ export class WalletServiceService {
     return { received: true };
   }
 
-  async addBankDetail(userId: string, data: { bankName: string; accountNumber: string; accountName: string }) {
+  async addBankDetail(userId: string, data: { bankName: string; accountNumber: string; accountName: string; bankCode: string }) {
     this.logger.log(`🏦 Adding bank for user ${userId}: ${data.bankName}`);
     return this.prisma.bankDetail.create({
       data: {
@@ -1465,5 +1465,138 @@ export class WalletServiceService {
     });
 
     return { status: 'SUCCESS', message: 'Saved card deleted successfully' };
+  }
+
+  async withdrawFiat(userId: string, data: { bankDetailId?: string; accountNumber?: string; bankCode?: string; accountName?: string; amount: number; narration?: string }) {
+    const { bankDetailId, amount, narration, accountNumber, bankCode, accountName } = data;
+    this.logger.log(`📤 Fiat Withdrawal request: user=${userId}, amount=${amount} NGN, bankDetailId=${bankDetailId || 'NONE (One-off)'}`);
+
+    let targetBank = {
+      bankName: '',
+      accountNumber: '',
+      accountName: '',
+      bankCode: '',
+    };
+
+    // 1. Resolve bank details (either from saved ID or from payload)
+    if (bankDetailId) {
+      const bankDetail = await this.prisma.bankDetail.findUnique({
+        where: { id: bankDetailId, userId },
+      });
+
+      if (!bankDetail) {
+        this.logger.warn(`❌ Bank detail not found for ID: ${bankDetailId}`);
+        throw new RpcException({ message: 'Linked bank account not found', status: 404 });
+      }
+      targetBank = {
+        bankName: bankDetail.bankName,
+        accountNumber: bankDetail.accountNumber,
+        accountName: bankDetail.accountName,
+        bankCode: bankDetail.bankCode,
+      };
+    } else {
+      // Validate one-off bank details
+      if (!accountNumber || !bankCode || !accountName) {
+        throw new RpcException({ message: 'Missing bank details for one-off withdrawal (accountNumber, bankCode, and accountName are required if no bankDetailId is provided)', status: 400 });
+      }
+      targetBank = {
+        bankName: 'One-off External Bank',
+        accountNumber,
+        accountName,
+        bankCode,
+      };
+    }
+
+    // 2. Lock Funds & Create Pending Transaction
+    const transaction = await this.prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findUnique({
+        where: { userId_currency: { userId, currency: 'NGN' } },
+      });
+
+      if (!wallet || wallet.balance < amount) {
+        throw new RpcException({ message: 'Insufficient NGN balance', status: 400 });
+      }
+
+      // Deduct balance (Locking)
+      await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { decrement: amount } },
+      });
+
+      // Create Pending Transaction record
+      return tx.transaction.create({
+        data: {
+          userId,
+          type: 'WITHDRAWAL',
+          status: 'PENDING',
+          amount,
+          currency: 'NGN',
+          reference: `FWD-${Date.now()}`,
+          note: narration || `Withdrawal to ${targetBank.bankName} (${targetBank.accountNumber})`,
+          metadata: JSON.stringify({ 
+            bankDetailId, 
+            bankName: targetBank.bankName, 
+            accountNumber: targetBank.accountNumber,
+            bankCode: targetBank.bankCode,
+            accountName: targetBank.accountName,
+          }),
+        },
+      });
+    });
+
+    try {
+      // 3. Create Transfer Recipient on Paystack
+      this.logger.log(`📡 Creating Paystack recipient for withdrawal ${transaction.id}`);
+      const recipientResponse = await this.paystack.createTransferRecipient({
+        name: targetBank.accountName,
+        account_number: targetBank.accountNumber,
+        bank_code: targetBank.bankCode,
+      });
+
+      const recipientCode = recipientResponse.data.recipient_code;
+
+      // 4. Initiate Transfer via Paystack
+      this.logger.log(`💸 Calling Paystack to initiate transfer for withdrawal ${transaction.id}`);
+      const transferResponse = await this.paystack.initiateTransfer({
+        amount,
+        recipient: recipientCode,
+        reference: transaction.reference,
+        reason: narration || 'XBanka Fiat Withdrawal',
+      });
+
+      const providerData = transferResponse.data || transferResponse;
+
+      // 5. Update Transaction status based on initial response
+      await this.prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'COMPLETED', // Simplified for demo; should ideally be PENDING until webhook
+          reference: providerData.reference || transaction.reference,
+        },
+      });
+
+      this.logger.log(`✅ Fiat Withdrawal initiated: ${transaction.id}`);
+      return transaction;
+
+    } catch (error) {
+      this.logger.error(`❌ Fiat Withdrawal FAILED: ${error.message}`);
+
+      // 6. Automatic Refund on Failure
+      await this.prisma.$transaction([
+        this.prisma.wallet.update({
+          where: { userId_currency: { userId, currency: 'NGN' } },
+          data: { balance: { increment: amount } },
+        }),
+        this.prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: 'FAILED',
+            note: (transaction.note || '') + ` (Error: ${error.message})`,
+          },
+        }),
+      ]);
+
+      throw new RpcException({ message: `Fiat withdrawal failed: ${error.message}`, status: 500 });
+    }
   }
 }

@@ -323,6 +323,12 @@ export class BankDetailDto {
     @IsNotEmpty()
     bankName: string;
 
+    @ApiProperty({ example: '058', description: 'The 3-digit bank code' })
+    @IsString()
+    @IsNotEmpty()
+    @Length(3, 3)
+    bankCode: string;
+
     @ApiProperty({ example: '0123456789', description: '10-digit account number' })
     @IsString()
     @IsNotEmpty()
@@ -826,6 +832,38 @@ export class DirectDebitDeactivateDto {
     @IsString()
     @IsNotEmpty()
     mandateId: string;
+}
+
+export class WithdrawFiatDto {
+    @ApiProperty({ description: 'The unique ID of the linked bank account', example: 'bank-uuid-here', required: false })
+    @IsUUID()
+    @IsOptional()
+    bankDetailId?: string;
+
+    @ApiProperty({ description: 'Account number for one-off withdrawal', example: '0123456789', required: false })
+    @IsOptional()
+    @IsString()
+    accountNumber?: string;
+
+    @ApiProperty({ description: 'Bank code for one-off withdrawal', example: '058', required: false })
+    @IsOptional()
+    @IsString()
+    bankCode?: string;
+
+    @ApiProperty({ description: 'Account name for one-off withdrawal', example: 'JOHN DOE', required: false })
+    @IsOptional()
+    @IsString()
+    accountName?: string;
+
+    @ApiProperty({ description: 'The amount to withdraw in NGN', example: 5000 })
+    @IsNumber()
+    @Min(100)
+    amount: number;
+
+    @ApiProperty({ description: 'Optional narration for the withdrawal', required: false, example: 'Withdrawal to personal account' })
+    @IsOptional()
+    @IsString()
+    narration?: string;
 }
 
 export class RefreshTokenDto {

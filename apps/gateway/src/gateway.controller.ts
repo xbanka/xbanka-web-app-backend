@@ -6,7 +6,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiParam, ApiBody } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { GoogleAuthGuard } from './google-auth.guard';
-import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateProfileInfoDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto, TokenizeCardDto, RefreshTokenDto, RefreshTokenResponseDto } from './dto/gateway.dto';
+import { PaginationQueryDto, WalletResponseDto, BankDetailDto, BankDetailResponseDto, TransactionResponseDto, PaginatedResponseDto, SignupDto, LoginDto, UpdateProfileDto, UpdateProfileInfoDto, UpdateIdentityDto, UpdateSelfieDto, UpdateAddressDto, SkipStepDto, VerifyBvnDto, VerifyEmailDto, ApiResponseDto, GiftCardDto, SellGiftCardDto, TradingOverviewDto, PayoutTrendDto, GiftCardCategoryDto, GiftCardRegionDto, ResendVerificationDto, GenerateNubanDto, AccountLookupDto, LoginResponseDto, VerifyDeviceDto, ChangePasswordDto, CreatePinDto, UpdatePinDto, ValidatePinDto, Enable2faDto, Verify2faDto, RequestSecurityOtpDto, ConvertQuoteDto, ConvertExecuteDto, ConvertQuoteResponseDto, WithdrawCryptoDto, WithdrawFiatDto, RateCalculatorDto, RateCalculatorResponseDto, InitiateFundingDto, FundingResponseDto, DirectDebitInitiateDto, DirectDebitChargeDto, DirectDebitDeactivateDto, ChargeSavedCardDto, TokenizeCardDto, RefreshTokenDto, RefreshTokenResponseDto } from './dto/gateway.dto';
 import { S3Service } from '@app/common';
 import { PaystackWebhookGuard } from './guards/paystack-webhook.guard';
 
@@ -186,6 +186,16 @@ export class GatewayController {
   @Post('wallets/withdraw/crypto')
   async withdrawCrypto(@Req() req, @Body() data: WithdrawCryptoDto) {
     return this.walletClient.send({ cmd: 'withdraw-crypto' }, { userId: req.user.id, ...data });
+  }
+
+  @ApiTags('wallet')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Withdraw fiat (NGN) to a linked bank account', description: 'Deducts NGN balance and initiates a transfer to a linked bank account via Paystack.' })
+  @ApiResponse({ status: 200, description: 'Withdrawal initiated successfully', type: TransactionResponseDto })
+  @Post('wallets/withdraw/fiat')
+  async withdrawFiat(@Req() req, @Body() data: WithdrawFiatDto) {
+    return this.walletClient.send({ cmd: 'withdraw-fiat' }, { userId: req.user.id, ...data });
   }
 
   @ApiTags('wallet')

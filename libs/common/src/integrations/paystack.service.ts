@@ -151,4 +151,48 @@ export class PaystackService extends BaseIntegrationService {
             throw error;
     }
     }
+
+    /**
+     * Creates a transfer recipient on Paystack.
+     * @param data { type: 'nuban', name, account_number, bank_code, currency: 'NGN' }
+     */
+    async createTransferRecipient(data: { name: string; account_number: string; bank_code: string }) {
+        this.logger.log(`🔄 Creating Paystack transfer recipient: name=${data.name}, account=${data.account_number}`);
+        try {
+            const response = await this.post<any>('/transferrecipient', {
+                type: 'nuban',
+                name: data.name,
+                account_number: data.account_number,
+                bank_code: data.bank_code,
+                currency: 'NGN',
+            });
+            return response;
+        } catch (error) {
+            this.logger.error(`❌ Failed to create Paystack transfer recipient: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Initiates a transfer from the Paystack balance to a recipient.
+     * @param data { source: 'balance', amount, recipient, reference, reason }
+     * Note: Amount should be in Naira (not kobo).
+     */
+    async initiateTransfer(data: { amount: number; recipient: string; reference: string; reason?: string }) {
+        this.logger.log(`💸 Initiating Paystack transfer: amount=${data.amount} NGN, recipient=${data.recipient}, ref=${data.reference}`);
+        try {
+            const koboAmount = Math.round(data.amount * 100);
+            const response = await this.post<any>('/transfer', {
+                source: 'balance',
+                amount: koboAmount,
+                recipient: data.recipient,
+                reference: data.reference,
+                reason: data.reason || 'XBanka Withdrawal',
+            });
+            return response;
+        } catch (error) {
+            this.logger.error(`❌ Failed to initiate Paystack transfer: ${error.message}`);
+            throw error;
+        }
+    }
 }

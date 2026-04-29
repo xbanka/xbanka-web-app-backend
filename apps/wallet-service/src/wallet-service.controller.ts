@@ -32,7 +32,7 @@ export class WalletServiceController {
   }
 
   @MessagePattern({ cmd: 'add-bank-detail' })
-  async handleAddBankDetail(@Payload() data: { userId: string; bankName: string; accountNumber: string; accountName: string }) {
+  async handleAddBankDetail(@Payload() data: { userId: string; bankName: string; accountNumber: string; accountName: string; bankCode: string }) {
     return this.walletService.addBankDetail(data.userId, data);
   }
 
@@ -114,6 +114,11 @@ export class WalletServiceController {
   @MessagePattern({ cmd: 'withdraw-crypto' })
   async handleWithdrawCrypto(@Payload() data: { userId: string; currency: string; network: string; address: string; amount: number; memo?: string; narration?: string }) {
     return this.walletService.withdrawCrypto(data.userId, data);
+  }
+
+  @MessagePattern({ cmd: 'withdraw-fiat' })
+  async handleWithdrawFiat(@Payload() data: { userId: string; bankDetailId?: string; accountNumber?: string; bankCode?: string; accountName?: string; amount: number; narration?: string }) {
+    return this.walletService.withdrawFiat(data.userId, data);
   }
 
   @MessagePattern({ cmd: 'initiate-fiat-deposit' })
