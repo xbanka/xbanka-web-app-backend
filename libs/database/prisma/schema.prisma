@@ -181,7 +181,7 @@ model BankDetail {
   /// The bank account number.
   accountNumber String
   /// The bank's unique code (e.g., 058 for GTB).
-  bankCode      String
+  bankCode      String   @default("")
   /// The name registered with the bank account.
   accountName   String
   /// Whether the bank account has been verified.
