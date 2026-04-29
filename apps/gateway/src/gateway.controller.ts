@@ -66,16 +66,51 @@ export class GatewayController {
   @Post('webhooks/crypto/obiex')
   async handleObiexWebhook(@Req() req, @Body() payload: any) {
     const signature = req.headers['x-obiex-signature'];
+    
+    // Console log for real-time debugging
+    console.log(`📥 [Gateway] Incoming Obiex Webhook | Signature: ${signature}`);
+    console.log(`📦 Payload: ${JSON.stringify(payload)}`);
+
+    if (!payload || Object.keys(payload).length === 0) {
+      console.warn('⚠️ [Gateway] Webhook received with empty or invalid payload');
+    }
+
+    // Log the incoming webhook to Database via microservice
+    this.walletClient.emit('log-webhook', {
+      source: 'OBIEX',
+      event: payload?.event || payload?.action || 'unknown',
+      payload: payload || {},
+      headers: req.headers,
+    });
+
     return this.walletClient.send({ cmd: 'handle-crypto-webhook' }, { payload, signature });
   }
 
   @ApiTags('webhooks')
   @ApiOperation({ summary: 'Fiat webhook handler', description: 'Public endpoint to handle fiat transaction notifications from providers like Flutterwave or Paystack.' })
   @Post('webhooks/fiat/:provider')
-  async handleFiatWebhook(@Req() req, @Body() payload: any) {
-    const provider = req.params.provider;
-    const signature = req.headers['x-webhook-signature'] || req.headers['verif-hash']; // Handle common signature headers
-    return this.walletClient.send({ cmd: 'handle-fiat-webhook' }, { payload, signature, provider });
+  async handleFiatWebhook(@Req() req, @Param('provider') provider: string, @Body() payload: any) {
+    // Log the incoming webhook
+    this.walletClient.emit('log-webhook', {
+      source: provider.toUpperCase(),
+      event: payload.event || payload.action || 'fiat.notification',
+      payload,
+      headers: req.headers,
+    });
+
+    return this.walletClient.send({ cmd: 'handle-fiat-webhook' }, { provider, payload, headers: req.headers });
+  }
+
+  @ApiTags('internal')
+  @ApiOperation({ summary: 'Get webhook logs', description: 'Retrieve and filter incoming webhook logs for debugging.' })
+  @Get('internal/webhooks/logs')
+  async getWebhookLogs(
+    @Query('source') source?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ) {
+    return this.walletClient.send({ cmd: 'get-webhook-logs' }, { source, status, limit, offset });
   }
 
   @ApiTags('nuban')
@@ -116,6 +151,14 @@ export class GatewayController {
   @Get('wallets/crypto')
   async getCryptoWallets(@Req() req) {
     return this.walletClient.send({ cmd: 'get-crypto-wallets' }, { userId: req.user.id });
+  }
+
+  @ApiOperation({ summary: 'DEBUG: Reset crypto assets', description: 'Deletes all local crypto wallets and addresses for the user. USE FOR TESTING ONLY.' })
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('wallets/crypto/reset')
+  async resetCryptoWallets(@Req() req) {
+    return this.walletClient.send({ cmd: 'reset-crypto-wallets' }, { userId: req.user.id });
   }
 
   @ApiTags('wallet')

@@ -634,3 +634,20 @@ model CryptoMarketData {
 
   @@index([symbol])
 }
+
+/// Logs incoming webhooks from external providers for debugging and audit purposes.
+model WebhookLog {
+  id            String   @id @default(uuid())
+  source        String   // e.g., 'OBIEX', 'PAYSTACK'
+  event         String?  // e.g., 'transaction.updated'
+  payload       String   // JSON stringified payload
+  headers       String?  // JSON stringified headers
+  status        String   @default("PENDING") // PENDING, PROCESSED, FAILED
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([source])
+  @@index([status])
+  @@index([createdAt])
+}

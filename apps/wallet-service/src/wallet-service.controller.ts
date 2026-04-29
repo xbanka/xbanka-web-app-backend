@@ -21,9 +21,29 @@ export class WalletServiceController {
     return this.walletService.getCryptoWallets(data.userId);
   }
 
+  @MessagePattern({ cmd: 'reset-crypto-wallets' })
+  async handleResetCryptoWallets(@Payload() data: { userId: string }) {
+    return this.walletService.resetCryptoWallets(data.userId);
+  }
+
   @MessagePattern({ cmd: 'get-fiat-wallets' })
   async handleGetFiatWallets(@Payload() data: { userId: string }) {
     return this.walletService.getFiatWallets(data.userId);
+  }
+
+  @MessagePattern({ cmd: 'log-webhook' })
+  async handleLogWebhook(@Payload() data: any) {
+    return this.walletService.logWebhook(data);
+  }
+
+  @MessagePattern({ cmd: 'update-webhook-status' })
+  async handleUpdateWebhookStatus(@Payload() data: { id: string; status: string; errorMessage?: string }) {
+    return this.walletService.updateWebhookStatus(data.id, data.status, data.errorMessage);
+  }
+
+  @MessagePattern({ cmd: 'get-webhook-logs' })
+  async handleGetWebhookLogs(@Payload() query: any) {
+    return this.walletService.getWebhookLogs(query);
   }
 
   @MessagePattern({ cmd: 'generate-wallet-address' })

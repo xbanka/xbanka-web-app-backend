@@ -254,6 +254,30 @@ export class WalletServiceService {
     });
   }
 
+  async resetCryptoWallets(userId: string) {
+    this.logger.log(`🗑️ Resetting crypto assets for user ${userId}`);
+
+    // 1. Delete all addresses for the user's crypto wallets
+    await this.prisma.walletAddress.deleteMany({
+      where: {
+        wallet: {
+          userId,
+          type: WalletType.CRYPTO,
+        },
+      },
+    });
+
+    // 2. Delete the crypto wallets themselves
+    await this.prisma.wallet.deleteMany({
+      where: {
+        userId,
+        type: WalletType.CRYPTO,
+      },
+    });
+
+    return { message: 'Crypto assets reset successfully' };
+  }
+
   async getFiatWallets(userId: string) {
     this.logger.log(`🏦 Fetching fiat wallets for user ${userId}`);
     return this.prisma.wallet.findMany({
@@ -261,6 +285,55 @@ export class WalletServiceService {
       include: { addresses: true },
       orderBy: { currency: 'asc' },
     });
+  }
+
+  async logWebhook(data: { source: string; event?: string; payload: any; headers?: any; status?: string; errorMessage?: string }) {
+    this.logger.log(`📝 Logging incoming webhook from ${data.source} (Event: ${data.event})`);
+    return this.prisma.webhookLog.create({
+      data: {
+        source: data.source,
+        event: data.event,
+        payload: JSON.stringify(data.payload),
+        headers: data.headers ? JSON.stringify(data.headers) : null,
+        status: data.status || 'PENDING',
+        errorMessage: data.errorMessage,
+      },
+    });
+  }
+
+  async updateWebhookStatus(id: string, status: string, errorMessage?: string) {
+    return this.prisma.webhookLog.update({
+      where: { id },
+      data: { status, errorMessage },
+    });
+  }
+
+  async getWebhookLogs(query: { source?: string; status?: string; limit?: number; offset?: number }) {
+    const { source, status, limit = 50, offset = 0 } = query;
+    const where: any = {};
+    if (source) where.source = source;
+    if (status) where.status = status;
+
+    const [logs, total] = await Promise.all([
+      this.prisma.webhookLog.findMany({
+        where,
+        take: Number(limit),
+        skip: Number(offset),
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.webhookLog.count({ where }),
+    ]);
+
+    return {
+      logs: logs.map(log => ({
+        ...log,
+        payload: JSON.parse(log.payload),
+        headers: log.headers ? JSON.parse(log.headers) : null,
+      })),
+      total,
+      limit,
+      offset,
+    };
   }
 
   async getOrCreateCryptoDepositAddress(userId: string, currency: string, network: string) {
@@ -294,7 +367,7 @@ export class WalletServiceService {
         walletId: wallet.id,
         provider: 'OBIEX',
         network,
-        address: data.address || data.data?.address,
+        address: data.address || data.data?.address || data.value || data.data?.value,
         memo: data.memo || data.data?.memo,
         providerRef: data.id || data.data?.id,
       },
@@ -305,14 +378,26 @@ export class WalletServiceService {
   }
 
   async handleCryptoWebhook(payload: any, signature: string) {
+    if (!payload || !signature) {
+      this.logger.warn('⚠️ Missing payload or signature — rejected');
+      return { status: 'failed', message: 'Missing data' };
+    }
+
     // 1. Validate HMAC signature from Obiex
+    const secret = process.env.OBIEX_API_SECRET || process.env.OBIEX_SECRET || '';
+    
+    // Debug logs for signature troubleshooting
+    this.logger.debug(`🔑 Webhook Secret Found: ${secret ? secret.substring(0, 4) + '...' + secret.substring(secret.length - 4) : 'MISSING'}`);
+    
     const expectedSig = require('crypto')
-      .createHmac('sha256', process.env.OBIEX_API_SECRET || '')
+      .createHmac('sha256', secret)
       .update(JSON.stringify(payload))
       .digest('hex');
 
     if (signature !== expectedSig) {
       this.logger.warn('⚠️ Invalid Obiex webhook signature — rejected');
+      this.logger.debug(`🛡️ Received: ${signature}`);
+      this.logger.debug(`🛡️ Expected: ${expectedSig}`);
       throw new RpcException({ message: 'Invalid webhook signature', status: 401 });
     }
 
