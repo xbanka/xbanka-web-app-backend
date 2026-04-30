@@ -174,6 +174,20 @@ export class PaystackService extends BaseIntegrationService {
     }
 
     /**
+     * Resolves an account number and bank code to an account name using Paystack.
+     */
+    async resolveAccountNumber(accountNumber: string, bankCode: string) {
+        this.logger.log(`🔍 Resolving account on Paystack: ${accountNumber} at ${bankCode}`);
+        try {
+            const response = await this.get<any>(`/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`);
+            return response;
+        } catch (error) {
+            this.logger.error(`❌ Failed to resolve account on Paystack: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
      * Initiates a transfer from the Paystack balance to a recipient.
      * @param data { source: 'balance', amount, recipient, reference, reason }
      * Note: Amount should be in Naira (not kobo).

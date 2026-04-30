@@ -134,6 +134,24 @@ export class GatewayController {
     }
   }
 
+  @ApiTags('paystack')
+  @ApiOperation({ summary: 'List all banks supported by Paystack', description: 'Returns a list of all banks supported by Paystack for account lookup and transfers.' })
+  @Get('accounts/paystack/banks')
+  async getPaystackBanks() {
+    return this.walletClient.send({ cmd: 'get-paystack-banks' }, {});
+  }
+
+  @ApiTags('paystack')
+  @ApiOperation({ summary: 'Resolve account name via Paystack', description: 'Looks up the account name for a given account number and bank code using Paystack.' })
+  @Post('accounts/paystack/lookup')
+  async resolvePaystackAccount(@Body() data: { accountNumber: string; bankCode: string }) {
+    try {
+      return await firstValueFrom(this.walletClient.send({ cmd: 'resolve-paystack-account' }, { ...data }));
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Paystack account lookup failed');
+    }
+  }
+
 
   @ApiTags('wallet')
   @ApiBearerAuth()

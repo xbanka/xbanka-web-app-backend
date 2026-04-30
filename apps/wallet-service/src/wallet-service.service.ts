@@ -730,6 +730,24 @@ export class WalletServiceService {
     return this.nuban.getBanks();
   }
 
+  async resolvePaystackAccount(accountNumber: string, bankCode: string) {
+    this.logger.log(`🔍 Resolving account on Paystack: ${accountNumber} (${bankCode})`);
+    try {
+      return await this.paystack.resolveAccountNumber(accountNumber, bankCode);
+    } catch (error) {
+      throw new RpcException(error.message || 'Failed to resolve account on Paystack');
+    }
+  }
+
+  async getPaystackBanks() {
+    this.logger.log('🏦 Fetching bank list from Paystack...');
+    try {
+      return await this.paystack.getBanks();
+    } catch (error) {
+      throw new RpcException(error.message || 'Failed to fetch banks from Paystack');
+    }
+  }
+
   private async calculateAdminFee(source: string, target: string, amount: number) {
     const config = await this.prisma.rateConfiguration.findUnique({
       where: { sourceCurrency_targetCurrency: { sourceCurrency: source, targetCurrency: target } },

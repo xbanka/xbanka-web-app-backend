@@ -131,6 +131,16 @@ export class WalletServiceController {
     return this.walletService.getAllBanks();
   }
 
+  @MessagePattern({ cmd: 'resolve-paystack-account' })
+  async handleResolvePaystackAccount(@Payload() data: { accountNumber: string; bankCode: string }) {
+    return this.walletService.resolvePaystackAccount(data.accountNumber, data.bankCode);
+  }
+
+  @MessagePattern({ cmd: 'get-paystack-banks' })
+  async handleGetPaystackBanks() {
+    return this.walletService.getPaystackBanks();
+  }
+
   @MessagePattern({ cmd: 'withdraw-crypto' })
   async handleWithdrawCrypto(@Payload() data: { userId: string; currency: string; network: string; address: string; amount: number; memo?: string; narration?: string }) {
     return this.walletService.withdrawCrypto(data.userId, data);
